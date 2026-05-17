@@ -133,5 +133,176 @@ elif menu == "🌱 Bài 1 — Cobb-Douglas + AI":
     ax2.legend()
     st.pyplot(fig2)
 
+elif menu == "💰 Bài 2 — LP ngân sách số":
+    from scipy.optimize import linprog
+
+    st.title("💰 Bài 2 — Quy hoạch tuyến tính phân bổ ngân sách số")
+
+    st.markdown("""
+    Bài toán phân bổ ngân sách cho 4 hạng mục đầu tư số:
+
+    - **x1**: Hạ tầng số  
+    - **x2**: AI và dữ liệu  
+    - **x3**: Nhân lực số  
+    - **x4**: R&D công nghệ  
+
+    Hàm mục tiêu:
+
+    **Max Z = 0.85x1 + 1.20x2 + 0.95x3 + 1.35x4**
+    """)
+
+    st.subheader("1. Chỉnh tham số ngân sách")
+
+    B = st.slider("Tổng ngân sách B, nghìn tỷ VND", 80, 150, 100, 5)
+
+    col1, col2, col3, col4 = st.columns(4)
+    min_x1 = col1.slider("x1 tối thiểu - Hạ tầng số", 0, 50, 25, 1)
+    min_x2 = col2.slider("x2 tối thiểu - AI & dữ liệu", 0, 50, 15, 1)
+    min_x3 = col3.slider("x3 tối thiểu - Nhân lực số", 0, 50, 20, 1)
+    min_x4 = col4.slider("x4 tối thiểu - R&D", 0, 50, 10, 1)
+
+    strategic_share = st.slider(
+        "Tỷ trọng tối thiểu của AI + R&D trong tổng ngân sách",
+        0.10, 0.60, 0.35, 0.01
+    )
+
+    st.subheader("2. Giải bài toán tối ưu")
+
+    # Tối đa hóa Z được chuyển thành minimize -Z
+    c = [-0.85, -1.20, -0.95, -1.35]
+
+    s = strategic_share
+
+    # Ràng buộc:
+    # x1 + x2 + x3 + x4 <= B
+    # x1 >= min_x1 -> -x1 <= -min_x1
+    # x2 >= min_x2 -> -x2 <= -min_x2
+    # x3 >= min_x3 -> -x3 <= -min_x3
+    # x4 >= min_x4 -> -x4 <= -min_x4
+    # x2 + x4 >= s(x1+x2+x3+x4)
+    # tương đương: s*x1 + (s-1)*x2 + s*x3 + (s-1)*x4 <= 0
+    A_ub = [
+        [1, 1, 1, 1],
+        [-1, 0, 0, 0],
+        [0, -1, 0, 0],
+        [0, 0, -1, 0],
+        [0, 0, 0, -1],
+        [s, s - 1, s, s - 1]
+    ]
+
+    b_ub = [
+        B,
+        -min_x1,
+        -min_x2,
+        -min_x3,
+        -min_x4,
+        0
+    ]
+
+    res = linprog(
+        c,
+        A_ub=A_ub,
+        b_ub=b_ub,
+        bounds=[(0, None)] * 4,
+        method="highs"
+    )
+
+    if res.success:
+        x1, x2, x3, x4 = res.x
+        Z = -res.fun
+
+        st.success("Bài toán có nghiệm tối ưu.")
+
+        metric1, metric2, metric3 = st.columns(3)
+        metric1.metric("Z* - GDP gain tối ưu", f"{Z:.2f}")
+        metric2.metric("Ngân sách sử dụng", f"{sum(res.x):.2f}")
+        metric3.metric("Tỷ trọng AI + R&D", f"{(x2 + x4) / sum(res.x) * 100:.2f}%")
+
+        result_df = pd.DataFrame({
+            "Biến": ["x1", "x2", "x3", "x4"],
+            "Hạng mục": ["Hạ tầng số", "AI & dữ liệu", "Nhân lực số", "R&D công nghệ"],
+            "Phân bổ tối ưu": [x1, x2, x3, x4],
+            "Hệ số tác động GDP": [0.85, 1.20, 0.95, 1.35]
+        })
+
+        st.subheader("3. Bảng phân bổ tối ưu")
+        st.dataframe(result_df.round(2))
+
+        st.subheader("4. Biểu đồ phân bổ ngân sách tối ưu")
+
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.bar(result_df["Hạng mục"], result_df["Phân bổ tối ưu"])
+        ax.set_title("Phân bổ ngân sách tối ưu cho 4 hạng mục")
+        ax.set_ylabel("Nghìn tỷ VND")
+        ax.grid(axis="y", alpha=0.3)
+        plt.xticks(rotation=20, ha="right")
+        st.pyplot(fig)
+
+        st.subheader("5. Phân tích độ nhạy theo ngân sách")
+
+        budget_list = [100, 120, 140]
+        z_list = []
+        status_list = []
+
+        for B_test in budget_list:
+            b_test = [
+                B_test,
+                -min_x1,
+                -min_x2,
+                -min_x3,
+                -min_x4,
+                0
+            ]
+
+            res_test = linprog(
+                c,
+                A_ub=A_ub,
+                b_ub=b_test,
+                bounds=[(0, None)] * 4,
+                method="highs"
+            )
+
+            if res_test.success:
+                z_list.append(-res_test.fun)
+                status_list.append("Tối ưu")
+            else:
+                z_list.append(np.nan)
+                status_list.append("Không khả thi")
+
+        sensitivity_df = pd.DataFrame({
+            "Ngân sách B": budget_list,
+            "Z*": z_list,
+            "Trạng thái": status_list
+        })
+
+        st.dataframe(sensitivity_df.round(2))
+
+        fig2, ax2 = plt.subplots(figsize=(7, 4))
+        ax2.plot(sensitivity_df["Ngân sách B"], sensitivity_df["Z*"], marker="o")
+        ax2.set_title("Đường cong Z*(B)")
+        ax2.set_xlabel("Ngân sách, nghìn tỷ VND")
+        ax2.set_ylabel("GDP gain tối ưu")
+        ax2.grid(True, alpha=0.3)
+        st.pyplot(fig2)
+
+        st.subheader("6. Nhận xét tự động")
+
+        max_row = result_df.loc[result_df["Phân bổ tối ưu"].idxmax()]
+        st.info(
+            f"Hạng mục được phân bổ nhiều nhất là **{max_row['Hạng mục']}** "
+            f"với {max_row['Phân bổ tối ưu']:.2f} nghìn tỷ VND."
+        )
+
+        if x4 >= max(x1, x2, x3):
+            st.success("R&D được ưu tiên nhiều do có hệ số tác động GDP cao nhất.")
+        else:
+            st.write(
+                "Kết quả phân bổ không chỉ phụ thuộc vào hệ số tác động, "
+                "mà còn phụ thuộc vào các ràng buộc tối thiểu và tỷ trọng công nghệ chiến lược."
+            )
+
+    else:
+        st.error("Bài toán không khả thi với bộ tham số hiện tại.")
+        st.write("Gợi ý: Hãy tăng tổng ngân sách hoặc giảm các mức tối thiểu của x1, x2, x3, x4.")
 else:
     st.warning("Module này sẽ được bổ sung ở bước tiếp theo.")
