@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from modules import bai1_cobb_douglas
 
 st.set_page_config(
     page_title="VN AIDEOM-VN",
