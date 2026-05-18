@@ -4,6 +4,7 @@ numpy
 matplotlib
 scipy
 pulp
+cvxpy
 plotly
 google-generativeai
 python-dotenv
