@@ -4,7 +4,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from modules import bai1_cobb_douglas
 from modules import bai2_lp_budget
-
 st.set_page_config(
     page_title="VN AIDEOM-VN",
     page_icon="🇻🇳",
