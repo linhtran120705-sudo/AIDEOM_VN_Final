@@ -629,10 +629,10 @@ def show_programming_solution():
         key="bai4_min_region",
     )
     max_region = c3.number_input(
-        "Trần mỗi vùng, tỷ VND",
+       "Trần mỗi vùng, tỷ VND",
         min_value=6000,
         max_value=30000,
-        value=12000,
+        value=13000,
         step=1000,
         key="bai4_max_region",
     )
@@ -663,7 +663,35 @@ def show_programming_solution():
         step=0.05,
         key="bai4_lambda",
     )
+# -----------------------------------------------------
+# Kiểm tra nhanh khả thi của ràng buộc công bằng C5
+# -----------------------------------------------------
+regions, region_names, items, item_names, beta, D0, beta_df, digital_df = get_region_item_data()
 
+d_max_initial = max(D0.values())
+d_min_initial = min(D0.values())
+
+required_d_for_weakest = (lam * d_max_initial - d_min_initial) / gamma
+max_possible_d_investment = max_region
+
+if required_d_for_weakest > max_possible_d_investment:
+    st.error(
+        f"Ràng buộc hiện tại có nguy cơ KHÔNG KHẢ THI. "
+        f"Vùng yếu nhất cần ít nhất {required_d_for_weakest:,.0f} tỷ VND đầu tư D "
+        f"để đạt λ = {lam:.2f}, nhưng trần mỗi vùng chỉ là {max_region:,.0f} tỷ VND."
+    )
+
+    suggested_lambda = (d_min_initial + gamma * max_region) / d_max_initial
+
+    st.warning(
+        f"Gợi ý sửa: giảm λ xuống tối đa khoảng {suggested_lambda:.2f}, "
+        f"hoặc tăng trần mỗi vùng lên ít nhất {required_d_for_weakest:,.0f} tỷ VND."
+    )
+
+    st.info(
+        "Bạn vẫn có thể tiếp tục thử nghiệm mô hình, nhưng nếu PuLP báo Infeasible thì nguyên nhân chính "
+        "là ràng buộc công bằng C5 quá chặt so với trần ngân sách mỗi vùng."
+    )
     # -----------------------------------------------------
     # 4.4.1 PuLP
     # -----------------------------------------------------
