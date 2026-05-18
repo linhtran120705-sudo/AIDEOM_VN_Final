@@ -1,8 +1,92 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 
 
 def render():
     st.title("🌱 Bài 1 — Hàm sản xuất Cobb-Douglas mở rộng với AI và số hóa")
-    st.write("Nội dung Bài 1 sẽ được đặt trong file này.")
+
+    st.markdown("""
+    Mô hình:
+
+    $Y_t = A_t K_t^\\alpha L_t^\\beta D_t^\\gamma AI_t^\\delta H_t^\\theta$
+    """)
+
+    df = pd.DataFrame({
+        "year": [2020, 2021, 2022, 2023, 2024, 2025],
+        "Y": [8044.4, 8487.5, 9513.3, 10221.8, 11511.9, 12847.6],
+        "K": [16500, 17800, 19600, 21300, 23500, 25900],
+        "L": [53.6, 50.5, 51.7, 52.4, 52.9, 53.4],
+        "D": [12.0, 12.7, 14.3, 16.5, 18.3, 19.5],
+        "AI": [55.6, 60.2, 65.4, 67.0, 73.8, 80.1],
+        "H": [24.1, 26.1, 26.2, 27.0, 28.4, 29.2],
+    })
+
+    st.subheader("1. Dữ liệu đầu vào")
+    st.dataframe(df)
+
+    st.subheader("2. Chỉnh tham số")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    alpha = col1.slider("α - Vốn K", 0.10, 0.60, 0.33, 0.01)
+    beta = col2.slider("β - Lao động L", 0.10, 0.60, 0.42, 0.01)
+    gamma = col3.slider("γ - Số hóa D", 0.00, 0.30, 0.10, 0.01)
+    delta = col4.slider("δ - AI", 0.00, 0.30, 0.08, 0.01)
+
+    theta = 1 - alpha - beta - gamma - delta
+    st.metric("θ - Nhân lực số H tự động", f"{theta:.2f}")
+
+    if theta < 0:
+        st.error("Tổng hệ số đang lớn hơn 1. Cần giảm alpha, beta, gamma hoặc delta.")
+        st.stop()
+
+    df["A_TFP"] = df["Y"] / (
+        df["K"] ** alpha *
+        df["L"] ** beta *
+        df["D"] ** gamma *
+        df["AI"] ** delta *
+        df["H"] ** theta
+    )
+
+    st.subheader("3. TFP A_t")
+    st.dataframe(df[["year", "A_TFP"]].round(3))
+
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ax.plot(df["year"], df["A_TFP"], marker="o")
+    ax.set_title("Xu hướng TFP A_t, 2020-2025")
+    ax.set_xlabel("Năm")
+    ax.set_ylabel("A_t")
+    ax.grid(True, alpha=0.3)
+    st.pyplot(fig)
+
+    A_bar = df["A_TFP"].mean()
+
+    df["Y_hat"] = A_bar * (
+        df["K"] ** alpha *
+        df["L"] ** beta *
+        df["D"] ** gamma *
+        df["AI"] ** delta *
+        df["H"] ** theta
+    )
+
+    df["APE_pct"] = abs(df["Y"] - df["Y_hat"]) / df["Y"] * 100
+    mape = df["APE_pct"].mean()
+
+    st.subheader("4. GDP thực tế và GDP dự báo")
+    c1, c2 = st.columns(2)
+    c1.metric("A trung bình", f"{A_bar:.3f}")
+    c2.metric("MAPE", f"{mape:.2f}%")
+
+    st.dataframe(df[["year", "Y", "Y_hat", "APE_pct"]].round(2))
+
+    fig2, ax2 = plt.subplots(figsize=(8, 4))
+    ax2.plot(df["year"], df["Y"], marker="o", label="GDP thực tế")
+    ax2.plot(df["year"], df["Y_hat"], marker="o", linestyle="--", label="GDP dự báo")
+    ax2.set_title("So sánh GDP thực tế và GDP dự báo")
+    ax2.set_xlabel("Năm")
+    ax2.set_ylabel("GDP, nghìn tỷ VND")
+    ax2.grid(True, alpha=0.3)
+    ax2.legend()
+    st.pyplot(fig2)
