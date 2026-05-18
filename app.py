@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from modules import bai1_cobb_douglas
+from modules import bai2_lp_budget
 
 st.set_page_config(
     page_title="VN AIDEOM-VN",
@@ -51,7 +52,7 @@ elif menu == "🌱 Bài 1 — Cobb-Douglas + AI":
     bai1_cobb_douglas.render()
 
 elif menu == "💰 Bài 2 — LP ngân sách số":
-    from scipy.optimize import linprog
+    bai2_lp_budget.render()
 
 
 else:
