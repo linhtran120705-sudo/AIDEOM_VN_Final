@@ -746,6 +746,20 @@ def render():
 
     df = load_macro_data()
 
+    st.sidebar.markdown("### Tham số Bài 1")
+    alpha = st.sidebar.slider("Bài 1 - α - Vốn K", 0.10, 0.60, 0.33, 0.01, key="bai1_alpha")
+    beta = st.sidebar.slider("Bài 1 - β - Lao động L", 0.10, 0.60, 0.42, 0.01, key="bai1_beta")
+    gamma = st.sidebar.slider("Bài 1 - γ - Số hóa D", 0.00, 0.30, 0.10, 0.01, key="bai1_gamma")
+    delta = st.sidebar.slider("Bài 1 - δ - AI", 0.00, 0.30, 0.08, 0.01, key="bai1_delta")
+
+    theta = 1 - alpha - beta - gamma - delta
+
+    st.sidebar.metric("Bài 1 - θ - Nhân lực số H", f"{theta:.2f}")
+
+    if theta < 0:
+        st.sidebar.error("Tổng hệ số đang lớn hơn 1.")
+        st.stop()
+
     tabs = st.tabs([
         "1.1 Bối cảnh",
         "1.2 Mô hình",
@@ -764,13 +778,11 @@ def render():
         show_data(df)
 
     with tabs[3]:
-        alpha, beta, gamma, delta, theta = show_parameters()
         df_model, ga_summary, scenario_2030, mape = show_requirement_14(
             df, alpha, beta, gamma, delta, theta
         )
 
     with tabs[4]:
-        alpha, beta, gamma, delta, theta = show_parameters()
         df_model, A_bar, mape = calculate_model(df, alpha, beta, gamma, delta, theta)
         ga, ga_summary, avg_growth = calculate_growth_accounting(
             df_model, alpha, beta, gamma, delta, theta
