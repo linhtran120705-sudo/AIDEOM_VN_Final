@@ -7,7 +7,7 @@ from modules import bai2_lp_budget
 from modules import bai3_priority_sectors
 from modules import bai4_lp_region_budget
 from modules import bai5_mip_project_selection
-
+from modules import bai6_topsis_ai_regions
 
 st.set_page_config(
     page_title="VN AIDEOM-VN",
@@ -67,7 +67,8 @@ elif menu == "🗺️ Bài 4 — LP ngành-vùng":
 elif menu == "🎯 Bài 5 — MIP 15 dự án":
     bai5_mip_project_selection.render()
 
-
+elif menu == "🏆 Bài 6 — TOPSIS 6 vùng":
+    bai6_topsis_ai_regions.render()
 
 
 else:
