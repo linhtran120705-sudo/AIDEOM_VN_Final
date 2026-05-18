@@ -6,7 +6,6 @@ from modules import bai1_cobb_douglas
 from modules import bai2_lp_budget
 from modules import bai3_priority_sectors
 from modules import bai4_lp_region_budget
-
 st.set_page_config(
     page_title="VN AIDEOM-VN",
     page_icon="🇻🇳",
@@ -59,7 +58,7 @@ elif menu == "💰 Bài 2 — LP ngân sách số":
 elif menu == "📊 Bài 3 — Priority 10 ngành":
     bai3_priority_sectors.render()
 
-elif menu == "🧭 Bài 4 — LP ngành - vùng":
+elif menu == "🗺️ Bài 4 — LP ngành-vùng":
     bai4_lp_region_budget.render()
 
 
