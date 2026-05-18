@@ -8,7 +8,7 @@ from modules import bai3_priority_sectors
 from modules import bai4_lp_region_budget
 from modules import bai5_mip_project_selection
 from modules import bai6_topsis_ai_regions
-
+from modules import bai7_nsga2_pareto
 
 
 st.set_page_config(
@@ -71,6 +71,11 @@ elif menu == "🎯 Bài 5 — MIP 15 dự án":
 
 elif menu == "🏆 Bài 6 — TOPSIS 6 vùng":
     bai6_topsis_ai_regions.render()
+
+elif menu == "🌐 Bài 7 — NSGA-II Pareto":
+    bai7_nsga2_pareto.render()
+
+
 
 
 else:
