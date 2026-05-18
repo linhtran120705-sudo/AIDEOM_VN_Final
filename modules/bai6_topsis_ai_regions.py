@@ -875,43 +875,185 @@ def show_policy_discussion():
         "an ninh dữ liệu, năng lực đại học - viện nghiên cứu, hạ tầng điện toán, đất đai, chi phí vận hành và vai trò lan tỏa quốc gia."
     )
 
-    # -----------------------------------------------------
+        # -----------------------------------------------------
     # Câu b
     # -----------------------------------------------------
     st.subheader("b) Khi dùng Entropy, vùng nào thay đổi xếp hạng lớn nhất? Vì sao?")
 
-    st.dataframe(comparison.round(4), use_container_width=True)
+    st.markdown("""
+    Phần này so sánh xếp hạng theo **trọng số chuyên gia** và **trọng số Entropy**.
+    Nếu mức thay đổi bằng 0 ở tất cả các vùng, điều đó cho thấy kết quả TOPSIS khá ổn định:
+    Entropy làm thay đổi trọng số tiêu chí nhưng chưa đủ làm đảo thứ hạng vùng.
+    """)
 
-    max_change_row = comparison.sort_values("Mức thay đổi tuyệt đối", ascending=False).iloc[0]
+    # Bảng so sánh rank
+    comparison_display = comparison[[
+        "region_name_vi",
+        "Score chuyên gia",
+        "Rank chuyên gia",
+        "Score Entropy",
+        "Rank Entropy",
+        "Chênh lệch Rank Entropy - Chuyên gia",
+        "Mức thay đổi tuyệt đối"
+    ]].copy()
 
-    fig_b = px.bar(
-        comparison.sort_values("Mức thay đổi tuyệt đối", ascending=False),
-        x="Mức thay đổi tuyệt đối",
-        y="region_name_vi",
-        orientation="h",
-        text="Mức thay đổi tuyệt đối",
-        title="Minh chứng câu b — Vùng thay đổi thứ hạng mạnh nhất khi dùng Entropy"
-    )
-    fig_b.update_traces(texttemplate="%{text:.0f}", textposition="outside")
-    fig_b.update_layout(height=480, yaxis=dict(autorange="reversed"))
-    st.plotly_chart(fig_b, use_container_width=True)
+    comparison_display.columns = [
+        "Vùng",
+        "Điểm TOPSIS - Chuyên gia",
+        "Rank chuyên gia",
+        "Điểm TOPSIS - Entropy",
+        "Rank Entropy",
+        "Chênh lệch rank",
+        "Mức thay đổi tuyệt đối"
+    ]
 
+    st.dataframe(comparison_display.round(4), use_container_width=True)
+
+    max_change = comparison["Mức thay đổi tuyệt đối"].max()
+
+    if max_change == 0:
+        st.success(
+            "Kết quả: không có vùng nào thay đổi xếp hạng khi chuyển từ trọng số chuyên gia sang trọng số Entropy. "
+            "Điều này cho thấy thứ hạng TOPSIS của 6 vùng tương đối vững, không phụ thuộc mạnh vào cách xác định trọng số."
+        )
+
+        # Biểu đồ thay thế: so sánh điểm TOPSIS thay vì vẽ cột toàn số 0
+        score_compare = comparison[[
+            "region_name_vi",
+            "Score chuyên gia",
+            "Score Entropy"
+        ]].copy()
+
+        score_long = score_compare.melt(
+            id_vars="region_name_vi",
+            value_vars=["Score chuyên gia", "Score Entropy"],
+            var_name="Bộ trọng số",
+            value_name="Điểm TOPSIS"
+        )
+
+        fig_b = px.bar(
+            score_long,
+            x="region_name_vi",
+            y="Điểm TOPSIS",
+            color="Bộ trọng số",
+            barmode="group",
+            text="Điểm TOPSIS",
+            title="Minh chứng câu b — Điểm TOPSIS thay đổi nhưng thứ hạng không đổi"
+        )
+
+        fig_b.update_traces(texttemplate="%{text:.3f}", textposition="outside")
+        fig_b.update_layout(
+            height=500,
+            xaxis_title="Vùng",
+            yaxis_title="Điểm TOPSIS C*",
+            legend_title_text="Bộ trọng số"
+        )
+
+        st.plotly_chart(fig_b, use_container_width=True)
+
+        # Biểu đồ slope rank: thể hiện trực quan rank giữ nguyên
+        rank_long = comparison[[
+            "region_name_vi",
+            "Rank chuyên gia",
+            "Rank Entropy"
+        ]].copy()
+
+        rank_long = rank_long.melt(
+            id_vars="region_name_vi",
+            value_vars=["Rank chuyên gia", "Rank Entropy"],
+            var_name="Phương pháp",
+            value_name="Xếp hạng"
+        )
+
+        fig_rank_stable = px.line(
+            rank_long,
+            x="Phương pháp",
+            y="Xếp hạng",
+            color="region_name_vi",
+            markers=True,
+            title="Minh chứng bổ sung — Thứ hạng giữ ổn định giữa hai phương pháp trọng số"
+        )
+
+        fig_rank_stable.update_layout(
+            height=520,
+            yaxis=dict(autorange="reversed", dtick=1),
+            xaxis_title="Phương pháp trọng số",
+            yaxis_title="Xếp hạng TOPSIS",
+            legend_title_text="Vùng"
+        )
+
+        st.plotly_chart(fig_rank_stable, use_container_width=True)
+
+        st.info(
+            "Diễn giải chính sách: khi cả trọng số chuyên gia và Entropy đều cho cùng thứ hạng, "
+            "khuyến nghị lựa chọn vùng ưu tiên đầu tư AI có độ tin cậy cao hơn. "
+            "Tuy nhiên, vẫn cần thận trọng vì Entropy chỉ phản ánh độ phân tán dữ liệu, không thay thế được ưu tiên chiến lược "
+            "như cân bằng vùng, an ninh dữ liệu và vai trò lan tỏa quốc gia."
+        )
+
+    else:
+        max_change_row = comparison.sort_values("Mức thay đổi tuyệt đối", ascending=False).iloc[0]
+
+        fig_b = px.bar(
+            comparison.sort_values("Mức thay đổi tuyệt đối", ascending=False),
+            x="Mức thay đổi tuyệt đối",
+            y="region_name_vi",
+            orientation="h",
+            text="Mức thay đổi tuyệt đối",
+            title="Minh chứng câu b — Vùng thay đổi thứ hạng mạnh nhất khi dùng Entropy"
+        )
+
+        fig_b.update_traces(texttemplate="%{text:.0f}", textposition="outside")
+        fig_b.update_layout(
+            height=480,
+            yaxis=dict(autorange="reversed"),
+            xaxis_title="Số bậc thay đổi",
+            yaxis_title="Vùng"
+        )
+
+        st.plotly_chart(fig_b, use_container_width=True)
+
+        st.success(
+            f"Trả lời: vùng thay đổi xếp hạng lớn nhất là **{max_change_row['region_name_vi']}**, "
+            f"với mức thay đổi **{max_change_row['Mức thay đổi tuyệt đối']:.0f} bậc**. "
+            "Nguyên nhân là Entropy tự gán trọng số cao hơn cho các tiêu chí có độ phân tán dữ liệu lớn. "
+            "Vùng nào mạnh hoặc yếu rõ ở các tiêu chí được Entropy tăng trọng số sẽ thay đổi thứ hạng nhiều hơn."
+        )
+
+    # Bảng trọng số để giải thích vì sao Entropy có thể làm thay đổi hoặc không làm thay đổi rank
     weight_df = pd.DataFrame({
         "Tiêu chí": [labels[c] for c in criteria],
         "Trọng số chuyên gia": expert_weights,
         "Trọng số Entropy": ent_w,
+        "Chênh lệch": ent_w - expert_weights,
     })
+
+    st.markdown("#### Bảng giải thích trọng số")
 
     st.dataframe(weight_df.round(4), use_container_width=True)
 
-    st.success(
-        f"Trả lời: vùng thay đổi xếp hạng lớn nhất là **{max_change_row['region_name_vi']}**, "
-        f"với mức thay đổi **{max_change_row['Mức thay đổi tuyệt đối']:.0f} bậc**. "
-        "Nguyên nhân là Entropy không hỏi chuyên gia tiêu chí nào quan trọng, mà tự gán trọng số cao hơn cho tiêu chí có độ phân tán dữ liệu lớn. "
-        "Vùng nào mạnh/yếu rõ ở các tiêu chí được Entropy tăng trọng số sẽ thay đổi thứ hạng nhiều hơn."
+    fig_weight_b = px.bar(
+        weight_df.melt(
+            id_vars="Tiêu chí",
+            value_vars=["Trọng số chuyên gia", "Trọng số Entropy"],
+            var_name="Bộ trọng số",
+            value_name="Trọng số"
+        ),
+        x="Tiêu chí",
+        y="Trọng số",
+        color="Bộ trọng số",
+        barmode="group",
+        title="Vì sao kết quả Entropy có thể khác hoặc giống trọng số chuyên gia?"
     )
 
-    # -----------------------------------------------------
+    fig_weight_b.update_layout(
+        height=500,
+        xaxis_title="Tiêu chí",
+        yaxis_title="Trọng số",
+        legend_title_text="Bộ trọng số"
+    )
+
+    st.plotly_chart(fig_weight_b, use_container_width=True)
     # Câu c
     # -----------------------------------------------------
     st.subheader("c) Tương quan giữa AI Readiness và Internet penetration ảnh hưởng thế nào?")
