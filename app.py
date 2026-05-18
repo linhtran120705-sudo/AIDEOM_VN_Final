@@ -7,7 +7,6 @@ from modules import bai2_lp_budget
 from modules import bai3_priority_sectors
 
 
-
 st.set_page_config(
     page_title="VN AIDEOM-VN",
     page_icon="🇻🇳",
@@ -59,8 +58,6 @@ elif menu == "💰 Bài 2 — LP ngân sách số":
 
 elif choice == "📊 Bài 3 — Priority 10 ngành":
     bai3_priority_sectors.render()
-
-
 
 
 
