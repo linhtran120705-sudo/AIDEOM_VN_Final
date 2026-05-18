@@ -95,6 +95,7 @@ def get_beta_long():
                 "β tác động biên": beta[(r, j)],
                 "Digital Index Dᵣ": D0[r],
             })
+
     return pd.DataFrame(rows)
 
 
@@ -104,7 +105,7 @@ def get_beta_long():
 def solve_pulp_model(
     total_budget=50000,
     min_region=5000,
-    max_region=12000,
+    max_region=13000,
     min_h_total=12000,
     gamma=0.002,
     lam=0.7,
@@ -241,7 +242,7 @@ def solve_pulp_model(
 def solve_cvxpy_model(
     total_budget=50000,
     min_region=5000,
-    max_region=12000,
+    max_region=13000,
     min_h_total=12000,
     gamma=0.002,
     lam=0.7,
@@ -254,16 +255,13 @@ def solve_cvxpy_model(
     regions, region_names, items, item_names, beta, D0, beta_df, digital_df = get_region_item_data()
 
     n_r = len(regions)
-    n_j = len(items)
-
     beta_matrix = np.array([[beta[(r, j)] for j in items] for r in regions])
     D0_vector = np.array([D0[r] for r in regions], dtype=float)
 
-    x = cp.Variable((n_r, n_j), nonneg=True)
+    x = cp.Variable((n_r, len(items)), nonneg=True)
     M = cp.Variable(nonneg=True)
 
     objective = cp.Maximize(cp.sum(cp.multiply(beta_matrix, x)))
-
     constraints = []
 
     # C1
@@ -275,10 +273,10 @@ def solve_cvxpy_model(
         if enforce_region_cap:
             constraints.append(cp.sum(x[r_idx, :]) <= max_region)
 
-    # C4: H là cột cuối cùng
+    # C4: H là cột thứ 4, index = 3
     constraints.append(cp.sum(x[:, 3]) >= min_h_total)
 
-    # C5
+    # C5: D là cột thứ 2, index = 1
     if enforce_fairness:
         for r_idx in range(n_r):
             constraints.append(D0_vector[r_idx] + gamma * x[r_idx, 1] <= M)
@@ -288,9 +286,11 @@ def solve_cvxpy_model(
     problem = cp.Problem(objective, constraints)
 
     solver_used = None
+    installed = cp.installed_solvers()
+
     for solver in ["CLARABEL", "SCIPY", "ECOS", "SCS"]:
         try:
-            if solver in cp.installed_solvers():
+            if solver in installed:
                 problem.solve(solver=solver)
                 solver_used = solver
                 break
@@ -384,7 +384,30 @@ def check_constraints(result, total_budget, min_region, max_region, min_h_total,
 
 
 # ---------------------------------------------------------
-# 5. PHẦN 4.1 — BỐI CẢNH
+# 5. KIỂM TRA KHẢ THI NHANH C5
+# ---------------------------------------------------------
+def quick_feasibility_check(max_region, gamma, lam):
+    regions, region_names, items, item_names, beta, D0, beta_df, digital_df = get_region_item_data()
+
+    d_max_initial = max(D0.values())
+    d_min_initial = min(D0.values())
+
+    required_d_for_weakest = max(0, (lam * d_max_initial - d_min_initial) / gamma)
+    suggested_lambda = (d_min_initial + gamma * max_region) / d_max_initial
+
+    is_warning = required_d_for_weakest > max_region
+
+    return {
+        "is_warning": is_warning,
+        "required_d_for_weakest": required_d_for_weakest,
+        "suggested_lambda": suggested_lambda,
+        "d_max_initial": d_max_initial,
+        "d_min_initial": d_min_initial,
+    }
+
+
+# ---------------------------------------------------------
+# 6. PHẦN 4.1 — BỐI CẢNH
 # ---------------------------------------------------------
 def show_context():
     st.header("4.1. Bối cảnh Việt Nam")
@@ -457,7 +480,7 @@ def show_context():
 
 
 # ---------------------------------------------------------
-# 6. PHẦN 4.2 — MÔ HÌNH TOÁN HỌC
+# 7. PHẦN 4.2 — MÔ HÌNH TOÁN HỌC
 # ---------------------------------------------------------
 def show_math_model():
     st.header("4.2. Mô hình toán học đầy đủ")
@@ -505,7 +528,7 @@ def show_math_model():
         "Công thức": [
             "ΣᵣΣⱼ xⱼ,ᵣ ≤ 50.000",
             "Σⱼ xⱼ,ᵣ ≥ 5.000, ∀r",
-            "Σⱼ xⱼ,ᵣ ≤ 12.000, ∀r",
+            "Σⱼ xⱼ,ᵣ ≤ 13.000, ∀r",
             "Σᵣ xᴴ,ᵣ ≥ 12.000",
             "Dᵣ + γxᴰ,ᵣ ≥ λ·maxᵣ(Dᵣ + γxᴰ,ᵣ)",
             "xⱼ,ᵣ ≥ 0",
@@ -538,7 +561,7 @@ def show_math_model():
 
 
 # ---------------------------------------------------------
-# 7. PHẦN 4.3 — BẢNG HỆ SỐ β
+# 8. PHẦN 4.3 — BẢNG HỆ SỐ β
 # ---------------------------------------------------------
 def show_beta_data():
     st.header("4.3. Bảng hệ số tác động biên βⱼ,ᵣ")
@@ -599,7 +622,7 @@ def show_beta_data():
 
 
 # ---------------------------------------------------------
-# 8. PHẦN 4.4 — GIẢI BÀI TOÁN
+# 9. PHẦN 4.4 — GIẢI BÀI TOÁN
 # ---------------------------------------------------------
 def show_programming_solution():
     st.header("4.4. Giải bài toán lập trình")
@@ -612,6 +635,7 @@ def show_programming_solution():
     st.subheader("Thiết lập tham số mô hình")
 
     c1, c2, c3, c4 = st.columns(4)
+
     total_budget = c1.number_input(
         "Ngân sách tổng, tỷ VND",
         min_value=30000,
@@ -620,6 +644,7 @@ def show_programming_solution():
         step=5000,
         key="bai4_total_budget",
     )
+
     min_region = c2.number_input(
         "Sàn mỗi vùng, tỷ VND",
         min_value=0,
@@ -628,14 +653,16 @@ def show_programming_solution():
         step=1000,
         key="bai4_min_region",
     )
+
     max_region = c3.number_input(
-       "Trần mỗi vùng, tỷ VND",
+        "Trần mỗi vùng, tỷ VND",
         min_value=6000,
         max_value=30000,
         value=13000,
         step=1000,
         key="bai4_max_region",
     )
+
     min_h_total = c4.number_input(
         "Sàn H toàn quốc, tỷ VND",
         min_value=0,
@@ -646,6 +673,7 @@ def show_programming_solution():
     )
 
     c5, c6 = st.columns(2)
+
     gamma = c5.number_input(
         "γ - hiệu quả đầu tư D",
         min_value=0.0005,
@@ -655,6 +683,7 @@ def show_programming_solution():
         format="%.4f",
         key="bai4_gamma",
     )
+
     lam = c6.slider(
         "λ - mức công bằng vùng",
         min_value=0.50,
@@ -663,35 +692,34 @@ def show_programming_solution():
         step=0.05,
         key="bai4_lambda",
     )
-# -----------------------------------------------------
-# Kiểm tra nhanh khả thi của ràng buộc công bằng C5
-# -----------------------------------------------------
-regions, region_names, items, item_names, beta, D0, beta_df, digital_df = get_region_item_data()
 
-d_max_initial = max(D0.values())
-d_min_initial = min(D0.values())
+    # -----------------------------------------------------
+    # Kiểm tra nhanh khả thi của ràng buộc công bằng C5
+    # -----------------------------------------------------
+    feasibility = quick_feasibility_check(max_region=max_region, gamma=gamma, lam=lam)
 
-required_d_for_weakest = (lam * d_max_initial - d_min_initial) / gamma
-max_possible_d_investment = max_region
+    if feasibility["is_warning"]:
+        st.error(
+            f"Ràng buộc hiện tại có nguy cơ KHÔNG KHẢ THI. "
+            f"Vùng yếu nhất cần ít nhất {feasibility['required_d_for_weakest']:,.0f} tỷ VND đầu tư D "
+            f"để đạt λ = {lam:.2f}, nhưng trần mỗi vùng chỉ là {max_region:,.0f} tỷ VND."
+        )
 
-if required_d_for_weakest > max_possible_d_investment:
-    st.error(
-        f"Ràng buộc hiện tại có nguy cơ KHÔNG KHẢ THI. "
-        f"Vùng yếu nhất cần ít nhất {required_d_for_weakest:,.0f} tỷ VND đầu tư D "
-        f"để đạt λ = {lam:.2f}, nhưng trần mỗi vùng chỉ là {max_region:,.0f} tỷ VND."
-    )
+        st.warning(
+            f"Gợi ý sửa: giảm λ xuống tối đa khoảng {feasibility['suggested_lambda']:.2f}, "
+            f"hoặc tăng trần mỗi vùng lên ít nhất {feasibility['required_d_for_weakest']:,.0f} tỷ VND."
+        )
 
-    suggested_lambda = (d_min_initial + gamma * max_region) / d_max_initial
+        st.info(
+            "Bạn vẫn có thể tiếp tục thử nghiệm mô hình. Nếu PuLP báo Infeasible thì nguyên nhân chính "
+            "là ràng buộc công bằng C5 quá chặt so với trần ngân sách mỗi vùng."
+        )
+    else:
+        st.success(
+            "Kiểm tra nhanh C5: bộ tham số hiện tại có khả năng khả thi. "
+            "Có thể tiếp tục giải mô hình bằng PuLP/CBC."
+        )
 
-    st.warning(
-        f"Gợi ý sửa: giảm λ xuống tối đa khoảng {suggested_lambda:.2f}, "
-        f"hoặc tăng trần mỗi vùng lên ít nhất {required_d_for_weakest:,.0f} tỷ VND."
-    )
-
-    st.info(
-        "Bạn vẫn có thể tiếp tục thử nghiệm mô hình, nhưng nếu PuLP báo Infeasible thì nguyên nhân chính "
-        "là ràng buộc công bằng C5 quá chặt so với trần ngân sách mỗi vùng."
-    )
     # -----------------------------------------------------
     # 4.4.1 PuLP
     # -----------------------------------------------------
@@ -712,14 +740,31 @@ if required_d_for_weakest > max_possible_d_investment:
         enforce_region_cap=True,
     )
 
+    if pulp_result is None:
+        st.error("Không thể chạy PuLP. Hãy kiểm tra thư viện `pulp` trong requirements.txt.")
+        return
+
     if pulp_result["status"] != "Optimal":
         st.error(f"Mô hình PuLP không tối ưu. Trạng thái: {pulp_result['status']}")
+
+        st.markdown("""
+        **Cách xử lý nhanh:**
+
+        - Tăng `Trần mỗi vùng` lên 13.000 hoặc 14.000 tỷ VND.
+        - Hoặc giảm `λ - mức công bằng vùng` xuống 0.65.
+        - Hoặc tăng `γ - hiệu quả đầu tư D` nếu giả định đầu tư chuyển đổi số tạo tác động mạnh hơn.
+        """)
+
         return
 
     m1, m2, m3 = st.columns(3)
     m1.metric("Trạng thái PuLP", pulp_result["status"])
     m2.metric("Z* GDP gain", f"{pulp_result['objective']:,.2f}", "tỷ VND")
-    m3.metric("Tổng ngân sách dùng", f"{pulp_result['allocation_matrix'].values.sum():,.0f}", "tỷ VND")
+    m3.metric(
+        "Tổng ngân sách dùng",
+        f"{pulp_result['allocation_matrix'].values.sum():,.0f}",
+        "tỷ VND"
+    )
 
     st.markdown("#### Ma trận phân bổ tối ưu 6×4, đơn vị: tỷ VND")
     st.dataframe(pulp_result["allocation_matrix"].round(2), use_container_width=True)
@@ -741,9 +786,10 @@ if required_d_for_weakest > max_possible_d_investment:
     # -----------------------------------------------------
     st.subheader("Câu 4.4.2 — Giải lại bằng CVXPY và so sánh với PuLP")
 
+    cvxpy_result = None
+
     if not CVXPY_AVAILABLE:
         st.warning("Chưa cài CVXPY. Hãy thêm `cvxpy` vào requirements.txt nếu muốn giải bằng CVXPY.")
-        cvxpy_result = None
     else:
         cvxpy_result = solve_cvxpy_model(
             total_budget=total_budget,
@@ -756,7 +802,7 @@ if required_d_for_weakest > max_possible_d_investment:
             enforce_region_cap=True,
         )
 
-        if cvxpy_result["allocation_matrix"] is not None:
+        if cvxpy_result is not None and cvxpy_result["allocation_matrix"] is not None:
             diff_obj = abs(pulp_result["objective"] - cvxpy_result["objective"])
             max_diff_x = abs(
                 pulp_result["allocation_matrix"] - cvxpy_result["allocation_matrix"]
@@ -779,7 +825,7 @@ if required_d_for_weakest > max_possible_d_investment:
                     "Điều này có thể do nghiệm tối ưu không duy nhất hoặc sai khác số học giữa solver."
                 )
         else:
-            st.warning(f"CVXPY chưa tìm được nghiệm tối ưu. Trạng thái: {cvxpy_result['status']}")
+            st.warning("CVXPY chưa tìm được nghiệm tối ưu hoặc solver không khả dụng.")
 
     # -----------------------------------------------------
     # 4.4.3 Heatmap phân bổ
@@ -816,7 +862,11 @@ if required_d_for_weakest > max_possible_d_investment:
     fig_item.update_layout(height=480)
     st.plotly_chart(fig_item, use_container_width=True)
 
-    top_region = pulp_result["region_summary"].sort_values("Tổng ngân sách, tỷ VND", ascending=False).iloc[0]
+    top_region = pulp_result["region_summary"].sort_values(
+        "Tổng ngân sách, tỷ VND",
+        ascending=False
+    ).iloc[0]
+
     top_item_each_region = pulp_result["allocation_matrix"].idxmax(axis=1).reset_index()
     top_item_each_region.columns = ["Vùng", "Hạng mục được ưu tiên nhất"]
 
@@ -844,7 +894,11 @@ if required_d_for_weakest > max_possible_d_investment:
         enforce_region_cap=True,
     )
 
-    comparison_rows = [
+    if no_fair_result is None or no_fair_result["status"] != "Optimal":
+        st.warning("Mô hình không có ràng buộc công bằng chưa tối ưu, không thể so sánh chi phí công bằng.")
+        return
+
+    compare_fair = pd.DataFrame([
         {
             "Kịch bản": "Có ràng buộc công bằng C5",
             "Z* GDP gain, tỷ VND": pulp_result["objective"],
@@ -853,9 +907,8 @@ if required_d_for_weakest > max_possible_d_investment:
             "Kịch bản": "Bỏ ràng buộc công bằng C5",
             "Z* GDP gain, tỷ VND": no_fair_result["objective"],
         },
-    ]
+    ])
 
-    compare_fair = pd.DataFrame(comparison_rows)
     cost_fairness = no_fair_result["objective"] - pulp_result["objective"]
     cost_fairness_pct = cost_fairness / no_fair_result["objective"] * 100
 
@@ -893,7 +946,7 @@ if required_d_for_weakest > max_possible_d_investment:
 
 
 # ---------------------------------------------------------
-# 9. PHẦN 4.5 — THẢO LUẬN CHÍNH SÁCH
+# 10. PHẦN 4.5 — THẢO LUẬN CHÍNH SÁCH
 # ---------------------------------------------------------
 def show_policy_discussion():
     st.header("4.5. Câu hỏi thảo luận chính sách")
@@ -904,7 +957,7 @@ def show_policy_discussion():
 
     total_budget = 50000
     min_region = 5000
-    max_region = 12000
+    max_region = 13000
     min_h_total = 12000
     gamma = 0.002
     lam = 0.7
@@ -942,8 +995,17 @@ def show_policy_discussion():
         enforce_region_cap=False,
     )
 
-    if full["status"] != "Optimal":
+    if full is None or full["status"] != "Optimal":
         st.error("Mô hình gốc không tối ưu nên không thể thảo luận.")
+        st.info("Gợi ý: dùng max_region = 13000 hoặc giảm λ xuống 0.65 để mô hình khả thi hơn.")
+        return
+
+    if no_fair is None or no_fair["status"] != "Optimal":
+        st.error("Mô hình bỏ công bằng không tối ưu nên không thể thảo luận câu a.")
+        return
+
+    if no_cap is None or no_cap["status"] != "Optimal":
+        st.error("Mô hình bỏ trần vùng không tối ưu nên không thể thảo luận câu b.")
         return
 
     # -----------------------------------------------------
@@ -1084,7 +1146,7 @@ def show_policy_discussion():
 
 
 # ---------------------------------------------------------
-# 10. HÀM RENDER CHÍNH
+# 11. HÀM RENDER CHÍNH
 # ---------------------------------------------------------
 def render():
     st.title("🧭 Bài 4 — Quy hoạch tuyến tính phân bổ ngân sách số theo ngành - vùng")
