@@ -56,7 +56,7 @@ elif menu == "🌱 Bài 1 — Cobb-Douglas + AI":
 elif menu == "💰 Bài 2 — LP ngân sách số":
     bai2_lp_budget.render()
 
-elif choice == "📊 Bài 3 — Priority 10 ngành":
+elif menu == "📊 Bài 3 — Priority 10 ngành":
     bai3_priority_sectors.render()
 
 
