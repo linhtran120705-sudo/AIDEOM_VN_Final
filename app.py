@@ -53,6 +53,5 @@ elif menu == "🌱 Bài 1 — Cobb-Douglas + AI":
 elif menu == "💰 Bài 2 — LP ngân sách số":
     bai2_lp_budget.render()
 
-
 else:
     st.warning("Module này sẽ được bổ sung ở bước tiếp theo.")
