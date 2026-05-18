@@ -9,6 +9,8 @@ from modules import bai4_lp_region_budget
 from modules import bai5_mip_project_selection
 from modules import bai6_topsis_ai_regions
 
+
+
 st.set_page_config(
     page_title="VN AIDEOM-VN",
     page_icon="🇻🇳",
