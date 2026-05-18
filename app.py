@@ -6,6 +6,9 @@ from modules import bai1_cobb_douglas
 from modules import bai2_lp_budget
 from modules import bai3_priority_sectors
 from modules import bai4_lp_region_budget
+
+
+
 st.set_page_config(
     page_title="VN AIDEOM-VN",
     page_icon="🇻🇳",
