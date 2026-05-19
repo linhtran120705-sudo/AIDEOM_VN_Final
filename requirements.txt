@@ -6,6 +6,7 @@ scipy
 pulp
 pymoo
 cvxpy
+gymnasium
 plotly
 google-generativeai
 python-dotenv
