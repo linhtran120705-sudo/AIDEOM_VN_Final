@@ -9,7 +9,7 @@ from modules import bai4_lp_region_budget
 from modules import bai5_mip_project_selection
 from modules import bai6_topsis_ai_regions
 from modules import bai7_nsga2_pareto
-
+from modules import bai8_dynamic_optimization
 
 st.set_page_config(
     page_title="VN AIDEOM-VN",
@@ -75,7 +75,8 @@ elif menu == "🏆 Bài 6 — TOPSIS 6 vùng":
 elif menu == "🌐 Bài 7 — NSGA-II Pareto":
     bai7_nsga2_pareto.render()
 
-
+elif choice == "⏳ Bài 8 — Động 2026-2035":
+    bai8_dynamic_optimization.render()
 
 
 else:
