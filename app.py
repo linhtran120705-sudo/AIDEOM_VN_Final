@@ -75,7 +75,7 @@ elif menu == "🏆 Bài 6 — TOPSIS 6 vùng":
 elif menu == "🌐 Bài 7 — NSGA-II Pareto":
     bai7_nsga2_pareto.render()
 
-elif choice == "⏳ Bài 8 — Động 2026-2035":
+elif menu == "⏳ Bài 8 — Động 2026-2035":
     bai8_dynamic_optimization.render()
 
 
