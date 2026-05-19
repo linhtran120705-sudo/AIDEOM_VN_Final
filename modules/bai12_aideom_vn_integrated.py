@@ -940,7 +940,8 @@ def show_labor_risk(total_budget, annual_budget):
     st.dataframe(
         lab_s[[
             "sector", "labor_million", "risk_pct", "x_AI", "x_H",
-            "NewJob_AI", "UpgradeJob", "DisplacedJob", "RetrainingCapacity", "NetJob", "RetrainingGap"
+            "NewJob_AI", "UpgradeJob", "DisplacedJob", "RetrainingCapacity",
+            "NetJob", "RetrainingGap"
         ]].round(3),
         use_container_width=True
     )
@@ -953,8 +954,17 @@ def show_labor_risk(total_budget, annual_budget):
         text="NetJob",
         title="Ảnh 12.8 — NetJob ròng theo ngành"
     )
-    fig_net.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
-    fig_net.update_layout(height=520, xaxis_tickangle=-25)
+    fig_net.update_traces(
+        texttemplate="%{text:,.0f}",
+        textposition="outside",
+        selector=dict(type="bar")
+    )
+    fig_net.update_layout(
+        height=520,
+        xaxis_tickangle=-25,
+        xaxis_title="Ngành",
+        yaxis_title="NetJob"
+    )
     st.plotly_chart(fig_net, use_container_width=True)
 
     comp = lab_s.melt(
@@ -963,6 +973,7 @@ def show_labor_risk(total_budget, annual_budget):
         var_name="Thành phần",
         value_name="Việc làm"
     )
+
     fig_comp = px.bar(
         comp,
         x="sector",
@@ -971,12 +982,22 @@ def show_labor_risk(total_budget, annual_budget):
         barmode="group",
         title="Ảnh 12.9 — Việc mới, nâng kỹ năng và dịch chuyển"
     )
-    fig_comp.update_layout(height=540, xaxis_tickangle=-25)
+    fig_comp.update_layout(
+        height=540,
+        xaxis_tickangle=-25,
+        xaxis_title="Ngành",
+        yaxis_title="Việc làm"
+    )
     st.plotly_chart(fig_comp, use_container_width=True)
 
     st.subheader("Bảng 12.8 — M5 Risk dashboard")
     st.dataframe(risk_s.round(3), use_container_width=True)
 
+    # -----------------------------------------------------
+    # BIỂU ĐỒ RỦI RO ĐÃ SỬA LỖI PLOTLY
+    # Lỗi cũ: update_traces(texttemplate=...) áp dụng cho cả scatter
+    # Cách sửa: chỉ áp dụng texttemplate cho trace dạng bar
+    # -----------------------------------------------------
     fig_risk = px.bar(
         risk_s,
         x="risk_type",
@@ -985,17 +1006,41 @@ def show_labor_risk(total_budget, annual_budget):
         text="score",
         title="Ảnh 12.10 — Cảnh báo rủi ro theo kịch bản"
     )
-    fig_risk.add_scatter(
-        x=risk_s["risk_type"],
-        y=risk_s["threshold"],
-        mode="lines+markers",
-        name="Threshold"
+
+    fig_risk.update_traces(
+        texttemplate="%{text:.1f}",
+        textposition="outside",
+        selector=dict(type="bar")
     )
-    fig_risk.update_traces(texttemplate="%{text:.1f}", textposition="outside")
-    fig_risk.update_layout(height=500, yaxis_title="Risk score")
+
+    fig_risk.add_trace(
+        go.Scatter(
+            x=risk_s["risk_type"],
+            y=risk_s["threshold"],
+            mode="lines+markers",
+            name="Ngưỡng cảnh báo",
+            line=dict(dash="dash"),
+            marker=dict(size=9),
+            hovertemplate=(
+                "Loại rủi ro: %{x}<br>"
+                "Ngưỡng cảnh báo: %{y:.1f}"
+                "<extra></extra>"
+            )
+        )
+    )
+
+    fig_risk.update_layout(
+        height=500,
+        yaxis_title="Risk score",
+        xaxis_title="Loại rủi ro",
+        legend_title_text="Trạng thái",
+        margin=dict(t=70, b=90)
+    )
+
     st.plotly_chart(fig_risk, use_container_width=True)
 
     warnings = risk_s[risk_s["status"] == "Cảnh báo"]
+
     if len(warnings) > 0:
         policy_card(
             "🚨",
