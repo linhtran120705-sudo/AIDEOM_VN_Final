@@ -12,7 +12,7 @@ from modules import bai7_nsga2_pareto
 from modules import bai8_dynamic_optimization
 from modules import bai9_ai_labor_market
 from modules import bai10_stochastic_programming
-
+from modules import bai12_aideom_vn_integrated
 
 
 
@@ -89,7 +89,8 @@ elif menu == "👷 Bài 9 — Lao động & AI":
 elif menu == "🎲 Bài 10 — Stochastic SP":
     bai10_stochastic_programming.render()
 
-
+elif menu == "🧠 Bài 12 — AIDEOM tích hợp":
+    bai12_aideom_vn_integrated.render()
 
 
 else:
