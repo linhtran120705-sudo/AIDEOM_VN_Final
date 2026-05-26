@@ -8,6 +8,7 @@ pymoo
 cvxpy
 gymnasium
 stable-baselines3
+torch
 plotly
 google-generativeai
 python-dotenv
