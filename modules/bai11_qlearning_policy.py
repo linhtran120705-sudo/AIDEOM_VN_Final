@@ -1321,13 +1321,19 @@ model.learn(total_timesteps=2000)
 
                     st.dataframe(eval_df, use_container_width=True)
 
-                    fig, ax = plt.subplots(figsize=(8, 4))
-                    ax.plot(eval_df["Bước"], eval_df["Reward"], marker="o")
-                    ax.set_title("Reward theo bước sau khi train DQN")
-                    ax.set_xlabel("Bước")
-                    ax.set_ylabel("Reward")
-                    ax.grid(True, alpha=0.3)
-                    st.pyplot(fig)
+                    fig_reward = px.line(
+                        eval_df,
+                        x="Bước",
+                        y="Reward",
+                        markers=True,
+                        title="Reward theo bước sau khi train DQN"
+                    )
+                    fig_reward.update_layout(
+                        height=420,
+                        xaxis_title="Bước",
+                        yaxis_title="Reward"
+                    )
+                    st.plotly_chart(fig_reward, use_container_width=True)
 
                 except Exception as e:
                     st.error(
