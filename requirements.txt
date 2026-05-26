@@ -7,6 +7,7 @@ pulp
 pymoo
 cvxpy
 gymnasium
+stable-baselines3
 plotly
 google-generativeai
 python-dotenv
