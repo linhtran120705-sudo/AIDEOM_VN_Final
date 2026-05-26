@@ -1192,48 +1192,152 @@ def show_training_solution():
 
     # -----------------------------------------------------
     # 11.3.5
-    # -----------------------------------------------------
-    st.subheader("Câu 11.3.5 — Mở rộng DQN với stable-baselines3")
+# -----------------------------------------------------
+st.subheader("Câu 11.3.5 — Huấn luyện DQN trực tiếp trên web")
 
-    if SB3_AVAILABLE:
-        st.success(
-            "stable-baselines3 đã sẵn sàng. Để tránh Streamlit Cloud chạy quá lâu, module này chỉ ghi nhận khả năng mở rộng DQN. Khi nộp notebook riêng, bạn có thể train DQN với MlpPolicy, 2 hidden layers 64 units."
-        )
+st.warning(
+    "Huấn luyện DQN trực tiếp trên Streamlit Cloud có thể mất thời gian và tốn tài nguyên. "
+    "Nên dùng số bước nhỏ để demo. Với bài nộp chính thức, tabular Q-learning vẫn là kết quả chính."
+)
 
+try:
+    from stable_baselines3 import DQN
+    from stable_baselines3.common.monitor import Monitor
+    sb3_ready = True
+except Exception as e:
+    sb3_ready = False
+    st.error("Chưa cài được stable-baselines3 hoặc import DQN bị lỗi.")
+    st.code(str(e))
+
+if sb3_ready:
+    total_timesteps = st.slider(
+        "Số bước huấn luyện DQN",
+        min_value=500,
+        max_value=10000,
+        value=2000,
+        step=500
+    )
+
+    learning_rate = st.select_slider(
+        "Learning rate",
+        options=[1e-4, 5e-4, 1e-3, 5e-3],
+        value=1e-3
+    )
+
+    gamma_dqn = st.slider(
+        "Gamma DQN",
+        min_value=0.80,
+        max_value=0.99,
+        value=0.95,
+        step=0.01
+    )
+
+    with st.expander("Xem mã minh họa cấu hình DQN"):
         st.code(
             """
 from stable_baselines3 import DQN
+from stable_baselines3.common.monitor import Monitor
 
 env = VietnamEconomyEnv()
+env = Monitor(env)
+
 model = DQN(
     "MlpPolicy",
     env,
     learning_rate=1e-3,
-    buffer_size=50000,
-    learning_starts=1000,
-    batch_size=64,
+    buffer_size=10000,
+    learning_starts=200,
+    batch_size=32,
     gamma=0.95,
     exploration_fraction=0.4,
     exploration_final_eps=0.05,
     policy_kwargs=dict(net_arch=[64, 64]),
-    verbose=1,
+    verbose=0,
+    seed=42,
 )
-model.learn(total_timesteps=50000)
+
+model.learn(total_timesteps=2000)
             """,
             language="python"
         )
-    else:
-        st.warning(
-            "Chưa cài `stable-baselines3`. Nếu muốn chạy DQN, thêm `stable-baselines3` vào requirements.txt. Với bài nộp Streamlit, tabular Q-learning đã đủ đáp ứng yêu cầu chính."
-        )
 
-    policy_card(
-        "🧠",
-        "DQN có thể cải thiện khi nào?",
-        "DQN hữu ích khi trạng thái liên tục, số trạng thái lớn hoặc chính sách cần học đặc trưng phi tuyến. Trong bài này trạng thái chỉ có 81 mức nên tabular Q-learning minh bạch hơn, dễ giải thích hơn và phù hợp với yêu cầu học tập.",
-        "info"
-    )
+    if st.button("Train DQN trực tiếp trên web"):
+        with st.spinner("Đang huấn luyện DQN, vui lòng chờ..."):
+            try:
+                env = VietnamEconomyEnv()
+                env = Monitor(env)
 
+                model = DQN(
+                    "MlpPolicy",
+                    env,
+                    learning_rate=learning_rate,
+                    buffer_size=10000,
+                    learning_starts=200,
+                    batch_size=32,
+                    gamma=gamma_dqn,
+                    exploration_fraction=0.4,
+                    exploration_final_eps=0.05,
+                    policy_kwargs=dict(net_arch=[64, 64]),
+                    verbose=0,
+                    seed=42,
+                )
+
+                model.learn(total_timesteps=total_timesteps)
+
+                st.success("Huấn luyện DQN hoàn tất.")
+
+                eval_env = VietnamEconomyEnv()
+                obs, info = eval_env.reset(seed=42)
+
+                total_reward = 0
+                actions = []
+                rewards = []
+
+                done = False
+                step_count = 0
+
+                while not done and step_count < 50:
+                    action, _states = model.predict(obs, deterministic=True)
+                    obs, reward, terminated, truncated, info = eval_env.step(action)
+
+                    done = terminated or truncated
+                    total_reward += reward
+                    actions.append(int(action))
+                    rewards.append(float(reward))
+                    step_count += 1
+
+                col1, col2 = st.columns(2)
+                col1.metric("Tổng reward đánh giá", f"{total_reward:.3f}")
+                col2.metric("Số bước đánh giá", step_count)
+
+                eval_df = pd.DataFrame({
+                    "Bước": list(range(1, len(actions) + 1)),
+                    "Action": actions,
+                    "Reward": rewards
+                })
+
+                st.dataframe(eval_df, use_container_width=True)
+
+                fig, ax = plt.subplots(figsize=(8, 4))
+                ax.plot(eval_df["Bước"], eval_df["Reward"], marker="o")
+                ax.set_title("Reward theo bước sau khi train DQN")
+                ax.set_xlabel("Bước")
+                ax.set_ylabel("Reward")
+                ax.grid(True, alpha=0.3)
+                st.pyplot(fig)
+
+            except Exception as e:
+                st.error(
+                    "DQN chưa chạy được. Kiểm tra lại VietnamEconomyEnv hoặc cấu hình thư viện."
+                )
+                st.code(str(e))
+
+policy_card(
+    "🧠",
+    "DQN có thể cải thiện khi nào?",
+    "DQN hữu ích khi trạng thái liên tục, số trạng thái lớn hoặc chính sách cần học đặc trưng phi tuyến. Trong bài này trạng thái chỉ có 81 mức nên tabular Q-learning minh bạch hơn, dễ giải thích hơn và phù hợp với yêu cầu học tập.",
+    "info"
+)
     return {
         "Q": Q,
         "curve": curve,
