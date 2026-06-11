@@ -12,3 +12,4 @@ torch
 plotly
 google-generativeai
 python-dotenv
+google-genai
