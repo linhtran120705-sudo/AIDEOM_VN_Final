@@ -203,6 +203,11 @@ def render_ai_agent(
         phân tích ý nghĩa kinh tế và chuyển kết quả định lượng thành hàm ý chính sách.
         """
     )
+    api_key = _get_gemini_key()
+if api_key:
+    st.success("Đã nhận GEMINI_API_KEY. Có thể gọi Gemini.")
+else:
+    st.error("Chưa nhận GEMINI_API_KEY. Cần kiểm tra .env hoặc Streamlit Secrets.")
 
     mode = st.radio(
         "Chọn chế độ phân tích",
