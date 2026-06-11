@@ -7,6 +7,7 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 
+from ai_agent import render_ai_agent
 
 # =========================================================
 # BÀI 1 — HÀM SẢN XUẤT COBB-DOUGLAS MỞ RỘNG VỚI AI & SỐ HÓA
