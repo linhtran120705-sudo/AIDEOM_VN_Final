@@ -4,6 +4,13 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 
+try:
+    from ai_agent import render_ai_agent
+    AI_AGENT_AVAILABLE = True
+except Exception:
+    render_ai_agent = None
+    AI_AGENT_AVAILABLE = False
+
 
 # =========================================================
 # BÀI 6 — TOPSIS XẾP HẠNG 6 VÙNG KINH TẾ VIỆT NAM
@@ -1153,6 +1160,294 @@ def show_policy_discussion():
     """)
 
 
+
+# ---------------------------------------------------------
+# 8. PHÂN TÍCH AI — POLICY INTELLIGENCE CHO TOPSIS
+# ---------------------------------------------------------
+def build_topsis_policy_intelligence():
+    """
+    Tạo bảng policy intelligence cho Bài 6.
+    Mục tiêu: không chỉ đọc TOPSIS như một bảng xếp hạng, mà chuyển kết quả thành
+    tín hiệu chính sách về độ vững, rủi ro thiên lệch vùng và ưu tiên triển khai.
+    """
+
+    df = get_region_data()
+    criteria, labels, units, is_benefit, expert_weights = get_criteria_info()
+
+    expert_result, _ = topsis(df, expert_weights, is_benefit)
+
+    X = df[criteria].values.astype(float)
+    ent_w = entropy_weights(X, is_benefit)
+    entropy_result, _ = topsis(df, ent_w, is_benefit)
+
+    ahp_w, pairwise_df, ahp_weight_df, ci, cr = ahp_weights_simple()
+    ahp_result, _ = topsis(df, ahp_w, is_benefit)
+
+    comparison = compare_rankings(expert_result, entropy_result, ahp_result)
+    sens_table, rank_matrix = ai_weight_sensitivity(df)
+
+    top1 = expert_result.iloc[0]
+    top3 = expert_result.head(3)
+    bottom = expert_result.iloc[-1]
+
+    top3_unique = sens_table["Top-3"].nunique()
+    rank_change_max = comparison["Mức thay đổi tuyệt đối"].max()
+    corr_ai_internet = df["ai_readiness_0_100"].corr(df["internet_penetration_pct"])
+
+    gap_top1_top3 = (
+        top3.iloc[0]["TOPSIS_score"] - top3.iloc[2]["TOPSIS_score"]
+        if len(top3) >= 3 else np.nan
+    )
+
+    top3_codes = set(top3["region_code"].tolist())
+    top3_raw = df[df["region_code"].isin(top3_codes)]
+
+    intelligence = pd.DataFrame({
+        "Góc phân tích": [
+            "Vùng dẫn đầu",
+            "Top-3 ưu tiên",
+            "Khoảng cách Top1 - Top3",
+            "Độ vững khi thay đổi w_AI",
+            "Độ vững khi đổi trọng số Entropy/AHP",
+            "AI Readiness bình quân Top-3",
+            "R&D/GRDP bình quân Top-3",
+            "Tương quan AI Readiness - Internet",
+            "Vùng cần hỗ trợ nền tảng",
+        ],
+        "Kết quả định lượng": [
+            f"{top1['region_name_vi']} | C* = {top1['TOPSIS_score']:.3f}",
+            " | ".join(top3["region_name_vi"].tolist()),
+            f"{gap_top1_top3:.3f}",
+            f"{top3_unique} cấu hình Top-3 khi w_AI thay đổi",
+            f"Mức đổi rank lớn nhất = {rank_change_max:.0f}",
+            f"{top3_raw['ai_readiness_0_100'].mean():.1f}/100",
+            f"{top3_raw['rd_intensity_pct'].mean():.2f}%",
+            f"{corr_ai_internet:.3f}",
+            f"{bottom['region_name_vi']} | C* = {bottom['TOPSIS_score']:.3f}",
+        ],
+        "Ý nghĩa chính sách": [
+            "Ứng viên mạnh nhất cho trung tâm AI hoặc sandbox dữ liệu quy mô lớn.",
+            "Nhóm vùng có thể triển khai trung tâm AI theo mô hình hạt nhân - vệ tinh.",
+            "Nếu khoảng cách nhỏ, quyết định cuối cùng cần xét thêm địa - chính trị, an ninh dữ liệu và lan tỏa vùng.",
+            "Top-3 càng ít thay đổi thì khuyến nghị càng vững trước ưu tiên chính sách về AI.",
+            "Nếu đổi rank thấp, kết quả không phụ thuộc quá mạnh vào một phương pháp trọng số.",
+            "Phản ánh năng lực hấp thụ AI của nhóm vùng ưu tiên.",
+            "Cho biết nhóm ưu tiên có đủ nền tảng đổi mới sáng tạo hay chưa.",
+            "Nếu quá cao, cần tránh đếm lặp năng lực hạ tầng số trong TOPSIS.",
+            "Không nên bị bỏ lại; cần gói đầu tư nền tảng trước khi mở trung tâm AI lớn.",
+        ],
+    })
+
+    return {
+        "df": df,
+        "expert_result": expert_result,
+        "entropy_result": entropy_result,
+        "ahp_result": ahp_result,
+        "comparison": comparison,
+        "sensitivity": sens_table,
+        "rank_matrix": rank_matrix,
+        "entropy_weights": ent_w,
+        "ahp_weights": ahp_w,
+        "ci": ci,
+        "cr": cr,
+        "corr_ai_internet": corr_ai_internet,
+        "top3_unique": top3_unique,
+        "rank_change_max": rank_change_max,
+        "intelligence": intelligence,
+    }
+
+
+def build_region_action_matrix(expert_result):
+    """
+    Chuyển điểm TOPSIS thành ma trận hành động chính sách theo vùng.
+    Đây là lớp phân tích mới: mỗi vùng không chỉ có rank mà có một khuyến nghị triển khai khác nhau.
+    """
+
+    rows = []
+
+    for _, row in expert_result.iterrows():
+        rank = int(row["Rank"])
+        ai = float(row["ai_readiness_0_100"])
+        digital = float(row["digital_index_0_100"])
+        labor = float(row["trained_labor_pct"])
+        rd = float(row["rd_intensity_pct"])
+        gini = float(row["gini_coef"])
+        score = float(row["TOPSIS_score"])
+
+        if rank <= 2 and ai >= 65 and digital >= 70:
+            action = "Trung tâm AI lõi quốc gia"
+            priority_package = "Siêu tính toán, dữ liệu lớn, sandbox AI, thu hút FDI công nghệ cao"
+        elif rank <= 3:
+            action = "Trung tâm AI vệ tinh / sandbox vùng"
+            priority_package = "Thử nghiệm AI theo ngành mũi nhọn, kết nối đại học - doanh nghiệp - chính quyền"
+        elif ai < 35 or digital < 50:
+            action = "Xây nền trước khi mở rộng AI"
+            priority_package = "Hạ tầng số, Internet, dữ liệu hành chính, đào tạo nhân lực số cơ bản"
+        else:
+            action = "Ứng dụng AI chuyên đề có chọn lọc"
+            priority_package = "AI trong nông nghiệp, logistics, y tế, giáo dục hoặc quản trị địa phương"
+
+        risks = []
+        if gini >= 0.40:
+            risks.append("bất bình đẳng cao")
+        if labor < 25:
+            risks.append("thiếu lao động đào tạo")
+        if rd < 0.25:
+            risks.append("R&D thấp")
+        if ai < 35:
+            risks.append("AI readiness thấp")
+        if not risks:
+            risks.append("rủi ro trung bình/kiểm soát được")
+
+        rows.append({
+            "Vùng": row["region_name_vi"],
+            "Rank TOPSIS": rank,
+            "TOPSIS_score": score,
+            "AI Readiness": ai,
+            "Digital Index": digital,
+            "LĐ qua đào tạo, %": labor,
+            "R&D/GRDP, %": rd,
+            "Gini": gini,
+            "Nhóm hành động": action,
+            "Gói chính sách gợi ý": priority_package,
+            "Rủi ro cần quản trị": ", ".join(risks),
+        })
+
+    return pd.DataFrame(rows)
+
+
+def show_ai_policy_analysis():
+    st.header("🤖 AI Analyst — Phân tích chính sách TOPSIS vùng AI")
+
+    st.markdown("""
+    Phần này bổ sung một lớp phân tích mới cho Bài 6: từ kết quả TOPSIS, Entropy, AHP và độ nhạy trọng số AI,
+    hệ thống chuyển bảng xếp hạng thành **ma trận hành động chính sách theo vùng**. Nhờ đó, kết quả không chỉ dừng ở
+    câu hỏi "vùng nào đứng đầu", mà còn trả lời "vùng nào nên làm trung tâm AI lõi, vùng nào làm vệ tinh,
+    và vùng nào cần xây nền trước".
+    """)
+
+    if not AI_AGENT_AVAILABLE:
+        st.error(
+            "Chưa tìm thấy file ai_agent.py hoặc chưa import được render_ai_agent. "
+            "Hãy đặt ai_agent.py cùng cấp với app.py để dùng AI Analyst."
+        )
+        return
+
+    analysis = build_topsis_policy_intelligence()
+    df = analysis["df"]
+    expert_result = analysis["expert_result"]
+    entropy_result = analysis["entropy_result"]
+    ahp_result = analysis["ahp_result"]
+    comparison = analysis["comparison"]
+    sens_table = analysis["sensitivity"]
+    corr_ai_internet = analysis["corr_ai_internet"]
+    intelligence = analysis["intelligence"]
+
+    action_matrix = build_region_action_matrix(expert_result)
+
+    st.subheader("1. Bảng policy intelligence")
+    st.dataframe(intelligence, use_container_width=True)
+
+    st.subheader("2. Ma trận hành động theo vùng")
+    st.dataframe(action_matrix.round(4), use_container_width=True)
+
+    c1, c2, c3, c4 = st.columns(4)
+    top1 = expert_result.iloc[0]
+    top3 = expert_result.head(3)
+    c1.metric("Top 1", top1["region_name_vi"], f"C* = {top1['TOPSIS_score']:.3f}")
+    c2.metric("Top-3 ổn định w_AI", f"{analysis['top3_unique']} cấu hình")
+    c3.metric("Đổi rank max Entropy", f"{analysis['rank_change_max']:.0f} bậc")
+    c4.metric("Corr AI - Internet", f"{corr_ai_internet:.3f}")
+
+    st.subheader("3. Bản đồ hành động: TOPSIS score × AI Readiness")
+
+    fig_action = px.scatter(
+        action_matrix,
+        x="AI Readiness",
+        y="TOPSIS_score",
+        size="Digital Index",
+        color="Nhóm hành động",
+        hover_name="Vùng",
+        hover_data=["Rank TOPSIS", "LĐ qua đào tạo, %", "R&D/GRDP, %", "Rủi ro cần quản trị"],
+        title="Ma trận hành động vùng: vùng sẵn sàng AI cao nên tăng tốc; vùng yếu cần xây nền trước",
+    )
+    fig_action.update_layout(height=560)
+    st.plotly_chart(fig_action, use_container_width=True)
+
+    st.subheader("4. Kiểm tra độ vững giữa chuyên gia, Entropy và AHP")
+
+    rank_compare = comparison[[
+        "region_name_vi", "Rank chuyên gia", "Rank Entropy", "Rank AHP",
+        "Score chuyên gia", "Score Entropy", "Score AHP"
+    ]].copy()
+    rank_compare.columns = [
+        "Vùng", "Rank chuyên gia", "Rank Entropy", "Rank AHP",
+        "Score chuyên gia", "Score Entropy", "Score AHP"
+    ]
+    st.dataframe(rank_compare.round(4), use_container_width=True)
+
+    rank_long = rank_compare.melt(
+        id_vars="Vùng",
+        value_vars=["Rank chuyên gia", "Rank Entropy", "Rank AHP"],
+        var_name="Phương pháp trọng số",
+        value_name="Xếp hạng",
+    )
+
+    fig_rank = px.line(
+        rank_long,
+        x="Phương pháp trọng số",
+        y="Xếp hạng",
+        color="Vùng",
+        markers=True,
+        title="Thứ hạng vùng có ổn định khi thay đổi phương pháp trọng số không?",
+    )
+    fig_rank.update_layout(height=560, yaxis=dict(autorange="reversed", dtick=1))
+    st.plotly_chart(fig_rank, use_container_width=True)
+
+    st.subheader("5. Kết nối AI Agent")
+
+    top3_names = ", ".join(top3["region_name_vi"].tolist())
+    bottom = expert_result.iloc[-1]
+
+    ai_result_table = action_matrix[[
+        "Vùng", "Rank TOPSIS", "TOPSIS_score", "AI Readiness", "Digital Index",
+        "LĐ qua đào tạo, %", "R&D/GRDP, %", "Gini", "Nhóm hành động", "Rủi ro cần quản trị"
+    ]].copy()
+
+    metrics = {
+        "Top1_region": str(top1["region_name_vi"]),
+        "Top1_TOPSIS_score": float(top1["TOPSIS_score"]),
+        "Top3_regions": top3_names,
+        "Lowest_region": str(bottom["region_name_vi"]),
+        "Lowest_TOPSIS_score": float(bottom["TOPSIS_score"]),
+        "Top3_unique_when_AI_weight_changes": int(analysis["top3_unique"]),
+        "Max_rank_change_entropy_vs_expert": float(analysis["rank_change_max"]),
+        "Correlation_AI_Readiness_Internet": float(corr_ai_internet),
+        "Entropy_top1": str(entropy_result.iloc[0]["region_name_vi"]),
+        "AHP_top1": str(ahp_result.iloc[0]["region_name_vi"]),
+        "AHP_consistency_ratio": float(analysis["cr"]),
+    }
+
+    policy_questions = (
+        "Vùng nào nên được chọn làm trung tâm AI lõi và vùng nào nên làm vệ tinh? "
+        "Kết quả TOPSIS có ổn định khi đổi trọng số AI Readiness, Entropy và AHP không? "
+        "Nếu AI Readiness và Internet penetration tương quan cao thì có rủi ro đếm lặp tiêu chí không? "
+        "Việt Nam nên cân bằng thế nào giữa hiệu quả triển khai nhanh, công bằng vùng miền và an ninh dữ liệu?"
+    )
+
+    render_ai_agent(
+        bai_name="Bài 6 — TOPSIS xếp hạng 6 vùng ưu tiên đầu tư AI",
+        model_goal=(
+            "Dùng TOPSIS để xếp hạng 6 vùng kinh tế - xã hội theo mức độ ưu tiên đầu tư AI; "
+            "so sánh trọng số chuyên gia, Entropy và AHP; kiểm tra độ nhạy theo w_AI; "
+            "và chuyển kết quả định lượng thành ma trận hành động chính sách theo vùng."
+        ),
+        metrics=metrics,
+        result_table=ai_result_table.round(4),
+        policy_questions=policy_questions,
+        key_suffix="bai6",
+    )
+
 # ---------------------------------------------------------
 # 8. HÀM RENDER CHÍNH
 # ---------------------------------------------------------
@@ -1171,6 +1466,7 @@ def render():
         "6.3 Dữ liệu",
         "6.4 Giải lập trình",
         "6.5 Chính sách",
+        "🤖 AI Analyst",
     ])
 
     with tabs[0]:
@@ -1187,3 +1483,6 @@ def render():
 
     with tabs[4]:
         show_policy_discussion()
+
+    with tabs[5]:
+        show_ai_policy_analysis()
