@@ -1,3 +1,6 @@
+import base64
+from pathlib import Path
+
 import plotly.express as px
 import streamlit as st
 import pandas as pd
@@ -23,6 +26,211 @@ st.set_page_config(
     page_icon="🇻🇳",
     layout="wide"
 )
+
+# =========================================================
+# GLOBAL THEME — ẢNH NỀN TOÀN WEB
+# =========================================================
+APP_DIR = Path(__file__).resolve().parent
+BACKGROUND_IMAGE = APP_DIR / "assets" / "vn_aideom_background.png"
+
+
+def _image_to_base64(image_path: Path) -> str:
+    """
+    Chuyển ảnh nền thành base64 để Streamlit hiển thị ổn định
+    khi đưa project lên GitHub/Streamlit Cloud.
+    """
+    try:
+        with open(image_path, "rb") as image_file:
+            return base64.b64encode(image_file.read()).decode()
+    except Exception:
+        return ""
+
+
+def apply_global_aideom_theme() -> None:
+    """
+    Giao diện chung cho toàn bộ dashboard:
+    - Ảnh nền AI phát triển ở Việt Nam
+    - Lớp phủ tối để dễ đọc chữ
+    - Card trong suốt kiểu glassmorphism
+    - Sidebar và tab đồng bộ với tinh thần AIDEOM-VN
+    """
+    bg_base64 = _image_to_base64(BACKGROUND_IMAGE)
+
+    if bg_base64:
+        background_css = f"""
+        background-image:
+            linear-gradient(120deg, rgba(2, 6, 23, 0.88), rgba(15, 23, 42, 0.72), rgba(2, 44, 34, 0.74)),
+            url("data:image/png;base64,{bg_base64}");
+        background-size: cover;
+        background-position: center center;
+        background-attachment: fixed;
+        """
+    else:
+        background_css = """
+        background:
+            radial-gradient(circle at 20% 20%, rgba(239, 68, 68, 0.28), transparent 30%),
+            radial-gradient(circle at 78% 28%, rgba(14, 165, 233, 0.30), transparent 34%),
+            radial-gradient(circle at 55% 85%, rgba(34, 197, 94, 0.22), transparent 32%),
+            linear-gradient(135deg, #020617, #0f172a 45%, #052e2b);
+        """
+
+    st.markdown(
+        f"""
+        <style>
+        /* Nền toàn bộ app */
+        .stApp {{
+            {background_css}
+            color: #f8fafc;
+        }}
+
+        /* Làm header mặc định trong suốt */
+        [data-testid="stHeader"] {{
+            background: rgba(2, 6, 23, 0.00);
+        }}
+
+        /* Vùng nội dung chính có lớp phủ nhẹ để chữ dễ đọc */
+        .block-container {{
+            padding-top: 2.0rem;
+            padding-bottom: 3.0rem;
+            background: linear-gradient(180deg, rgba(2, 6, 23, 0.30), rgba(2, 6, 23, 0.18));
+            border-radius: 22px;
+        }}
+
+        /* Sidebar kiểu kính mờ */
+        [data-testid="stSidebar"] > div:first-child {{
+            background:
+                linear-gradient(180deg, rgba(2, 6, 23, 0.94), rgba(15, 23, 42, 0.88)),
+                radial-gradient(circle at 20% 10%, rgba(239, 68, 68, 0.25), transparent 35%),
+                radial-gradient(circle at 80% 35%, rgba(14, 165, 233, 0.20), transparent 35%);
+            border-right: 1px solid rgba(255, 255, 255, 0.12);
+            backdrop-filter: blur(16px);
+        }}
+
+        /* Chữ trong sidebar */
+        [data-testid="stSidebar"] * {{
+            color: #e5e7eb;
+        }}
+
+        /* Card chung cho hero và section */
+        .hero-card, .section-card, .aideom-glass-card {{
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.78), rgba(30, 41, 59, 0.56));
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 24px;
+            box-shadow: 0 18px 45px rgba(0, 0, 0, 0.32);
+            backdrop-filter: blur(14px);
+        }}
+
+        /* Hero riêng cho trang chủ */
+        .hero-card {{
+            background:
+                linear-gradient(135deg, rgba(220, 38, 38, 0.26), rgba(14, 165, 233, 0.22), rgba(34, 197, 94, 0.14)),
+                linear-gradient(135deg, rgba(15, 23, 42, 0.76), rgba(2, 6, 23, 0.46));
+        }}
+
+        .hero-title {{
+            color: #ffffff;
+            text-shadow: 0 3px 18px rgba(0, 0, 0, 0.35);
+        }}
+
+        .hero-subtitle {{
+            color: #bae6fd;
+        }}
+
+        .hero-note, .small-muted {{
+            color: #e5e7eb;
+        }}
+
+        .badge {{
+            background: rgba(255, 255, 255, 0.12);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            color: #f8fafc;
+            backdrop-filter: blur(8px);
+        }}
+
+        /* Metric card */
+        [data-testid="stMetric"] {{
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.78), rgba(15, 118, 110, 0.18));
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 18px;
+            padding: 14px 16px;
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+            backdrop-filter: blur(12px);
+        }}
+
+        [data-testid="stMetricLabel"] {{
+            color: #cbd5e1;
+        }}
+
+        [data-testid="stMetricValue"] {{
+            color: #ffffff;
+        }}
+
+        /* Tabs */
+        button[data-baseweb="tab"] {{
+            background: rgba(15, 23, 42, 0.58);
+            border-radius: 999px;
+            margin-right: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.10);
+        }}
+
+        button[data-baseweb="tab"] p {{
+            color: #e5e7eb;
+            font-weight: 650;
+        }}
+
+        button[data-baseweb="tab"][aria-selected="true"] {{
+            background: linear-gradient(135deg, rgba(14, 165, 233, 0.88), rgba(34, 197, 94, 0.72));
+            border: 1px solid rgba(255, 255, 255, 0.32);
+        }}
+
+        /* Bảng dữ liệu */
+        [data-testid="stDataFrame"] {{
+            border-radius: 18px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.24);
+        }}
+
+        /* Plotly chart container */
+        [data-testid="stPlotlyChart"] {{
+            background: rgba(15, 23, 42, 0.56);
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            border-radius: 20px;
+            padding: 10px;
+            backdrop-filter: blur(10px);
+        }}
+
+        /* Expanders, info/warning boxes */
+        [data-testid="stExpander"] {{
+            background: rgba(15, 23, 42, 0.62);
+            border-radius: 18px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }}
+
+        /* Đảm bảo các khối markdown dễ đọc */
+        h1, h2, h3, h4, h5, h6, p, li, label, span {{
+            text-shadow: 0 1px 8px rgba(0, 0, 0, 0.20);
+        }}
+
+        /* Footer/scrollbar tinh gọn */
+        ::-webkit-scrollbar {{
+            width: 10px;
+            height: 10px;
+        }}
+        ::-webkit-scrollbar-thumb {{
+            background: rgba(148, 163, 184, 0.45);
+            border-radius: 999px;
+        }}
+        ::-webkit-scrollbar-track {{
+            background: rgba(15, 23, 42, 0.24);
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+apply_global_aideom_theme()
 
 st.sidebar.title("🇻🇳 VN AIDEOM-VN")
 st.sidebar.caption("Mô hình ra quyết định phát triển kinh tế Việt Nam trong kỉ nguyên AI")
