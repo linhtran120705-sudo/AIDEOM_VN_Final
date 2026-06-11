@@ -10,6 +10,13 @@ try:
 except ImportError:
     SCIPY_AVAILABLE = False
 
+try:
+    from ai_agent import render_ai_agent
+    AI_AGENT_AVAILABLE = True
+except Exception:
+    render_ai_agent = None
+    AI_AGENT_AVAILABLE = False
+
 
 # =========================================================
 # BÀI 8 — TỐI ƯU ĐỘNG PHÂN BỔ LIÊN THỜI GIAN 2026–2035
@@ -1132,6 +1139,248 @@ def show_policy_discussion():
     st.success("Thông điệp cuối cùng: Bài 8 cho thấy tăng trưởng dựa trên AI không chỉ là bài toán công nghệ, mà là bài toán thời gian. Ai đầu tư đúng thứ và đúng thời điểm sẽ tích lũy được năng lực sản xuất trước.")
 
 
+
+# ---------------------------------------------------------
+# 8.5 — AI ANALYST, POLICY INTELLIGENCE VÀ KIỂM TRA ĐỘ VỮNG
+# ---------------------------------------------------------
+def _safe_pct_change(last_value, first_value):
+    if abs(first_value) < 1e-12:
+        return np.nan
+    return (last_value / first_value - 1) * 100
+
+
+def build_dynamic_policy_intelligence(path, strategy_df=None, shock=None):
+    loading = classify_loading_pattern(path)
+    ratio_ai_h = path["I_AI"] / (path["I_H"] + 1e-9)
+    invest_share = path["Total_investment"] / (path["Y"] + 1e-9)
+    consumption_share = path["C"] / (path["Y"] + 1e-9)
+
+    decomp, decomp_long, avg_decomp = calculate_growth_decomposition(path)
+    top_growth_driver = avg_decomp.sort_values("Đóng góp bình quân", ascending=False).iloc[0]
+
+    shock_message = "Chưa chạy kịch bản cú sốc."
+    if shock is not None and isinstance(shock, dict) and "path" in shock:
+        shock_path = shock["path"]
+        shock_loss_2035 = path["Y"].iloc[-1] - shock_path["Y"].iloc[-1]
+        shock_loss_pct = shock_loss_2035 / (path["Y"].iloc[-1] + 1e-9) * 100
+        shock_message = f"Cú sốc 2028 làm Y_2035 thấp hơn khoảng {shock_loss_2035:,.2f}, tương đương {shock_loss_pct:.2f}%."
+
+    strategy_message = "Chưa có bảng so sánh chiến lược."
+    if strategy_df is not None and not strategy_df.empty:
+        best = strategy_df.sort_values("Welfare", ascending=False).iloc[0]
+        strategy_message = f"Chiến lược có Welfare cao nhất là {best['Chiến lược']} với Welfare = {best['Welfare']:.3f}."
+
+    rows = [
+        {
+            "Lớp phân tích": "Cấu trúc thời gian đầu tư",
+            "Kết quả định lượng": f"{loading['pattern']} | đầu kỳ = {loading['early']:,.2f}, cuối kỳ = {loading['late']:,.2f}",
+            "Ý nghĩa chính sách": loading["meaning"],
+        },
+        {
+            "Lớp phân tích": "Cân bằng tiêu dùng - đầu tư",
+            "Kết quả định lượng": f"C/Y bình quân = {consumption_share.mean():.3f}; I/Y bình quân = {invest_share.mean():.3f}",
+            "Ý nghĩa chính sách": "Mô hình lượng hóa mức hy sinh tiêu dùng hiện tại để tích lũy năng lực sản xuất tương lai.",
+        },
+        {
+            "Lớp phân tích": "Phối hợp AI - nhân lực số",
+            "Kết quả định lượng": f"AI/H bình quân = {ratio_ai_h.mean():.3f}; độ lệch chuẩn = {ratio_ai_h.std():.3f}",
+            "Ý nghĩa chính sách": "AI không nên đi một mình; nếu AI/H biến động mạnh, cần ổn định lộ trình đào tạo kỹ năng số đi kèm đầu tư AI.",
+        },
+        {
+            "Lớp phân tích": "Động lực tăng trưởng chủ đạo",
+            "Kết quả định lượng": f"Nguồn đóng góp bình quân lớn nhất: {top_growth_driver['Nguồn đóng góp']} ({top_growth_driver['Tỷ trọng trong tăng trưởng, %']:.2f}%)",
+            "Ý nghĩa chính sách": "Giúp giải thích tăng trưởng đến từ vốn, lao động, số hóa, AI, nhân lực hay TFP thay vì chỉ nhìn đường GDP.",
+        },
+        {
+            "Lớp phân tích": "Độ bền trước cú sốc",
+            "Kết quả định lượng": shock_message,
+            "Ý nghĩa chính sách": "Cú sốc ngắn hạn kiểm tra liệu mô hình có duy trì được tích lũy dài hạn hay phải cắt giảm đầu tư chiến lược.",
+        },
+        {
+            "Lớp phân tích": "So sánh chiến lược",
+            "Kết quả định lượng": strategy_message,
+            "Ý nghĩa chính sách": "So sánh tối ưu SLSQP với front-load, back-load và đầu tư trải đều để tránh kết luận một chiều.",
+        },
+    ]
+    return pd.DataFrame(rows)
+
+
+def build_dynamic_action_matrix(path):
+    latest = path.iloc[-1]
+    ratio_ai_h = (path["I_AI"] / (path["I_H"] + 1e-9)).mean()
+    loading = classify_loading_pattern(path)
+    y_growth = _safe_pct_change(path["Y"].iloc[-1], path["Y"].iloc[0])
+    tfp_growth = _safe_pct_change(path["A_TFP"].iloc[-1], path["A_TFP"].iloc[0])
+    h_growth = _safe_pct_change(path["H"].iloc[-1], path["H"].iloc[0])
+
+    rows = [
+        {
+            "Nhóm hành động": "Ưu tiên đầu kỳ",
+            "Tín hiệu từ mô hình": f"Mẫu hình đầu tư: {loading['pattern']}",
+            "Khuyến nghị": "Duy trì đầu tư sớm vào K, D, AI và H nếu mục tiêu là tạo hiệu ứng tích lũy trước năm 2030.",
+        },
+        {
+            "Nhóm hành động": "AI đi cùng nhân lực",
+            "Tín hiệu từ mô hình": f"AI/H bình quân = {ratio_ai_h:.3f}",
+            "Khuyến nghị": "Không mở rộng AI nhanh hơn năng lực đào tạo, quản trị dữ liệu và kỹ năng số của khu vực công - tư.",
+        },
+        {
+            "Nhóm hành động": "Theo dõi chất lượng tăng trưởng",
+            "Tín hiệu từ mô hình": f"Y tăng {y_growth:.2f}%, TFP tăng {tfp_growth:.2f}%",
+            "Khuyến nghị": "Không chỉ báo cáo GDP; cần theo dõi TFP, D, AI, H để biết tăng trưởng có thực sự dựa trên năng suất hay không.",
+        },
+        {
+            "Nhóm hành động": "Bảo vệ tiêu dùng tối thiểu",
+            "Tín hiệu từ mô hình": f"C/Y năm 2035 = {latest['C_share']:.3f}",
+            "Khuyến nghị": "Khi front-load đầu tư, cần thiết kế an sinh và truyền thông chính sách để tránh áp lực xã hội ngắn hạn.",
+        },
+        {
+            "Nhóm hành động": "Chống hao hụt kỹ năng",
+            "Tín hiệu từ mô hình": f"H tăng {h_growth:.2f}% trong giai đoạn mô phỏng",
+            "Khuyến nghị": "Đầu tư H cần đi kèm cơ chế giữ chân nhân lực AI, dữ liệu và bán dẫn để tránh chảy máu chất xám.",
+        },
+    ]
+    return pd.DataFrame(rows)
+
+
+def show_ai_policy_analysis():
+    st.header("🤖 AI Analyst — Phân tích động, độ vững và hàm ý chính sách")
+
+    st.markdown("""
+    Tab này bổ sung lớp phân tích tự động cho Bài 8 theo cách giống Bài 2: lấy trực tiếp kết quả mô hình,
+    chuyển thành `metrics`, `result_table`, câu hỏi chính sách và gửi sang `render_ai_agent`.
+    Phần này không thay đổi mô hình gốc, chỉ diễn giải kết quả theo logic chính sách.
+    """)
+
+    if not SCIPY_AVAILABLE:
+        st.error("Chưa cài `scipy`, nên chưa thể tạo phân tích AI cho Bài 8.")
+        return
+
+    with st.spinner("Đang tạo bộ kết quả mặc định cho AI Analyst..."):
+        opt = solve_dynamic_model(rho=0.97, gamma_utility=1.0, strategy_hint="balanced")
+        shock = solve_dynamic_model(rho=0.97, gamma_utility=1.0, shock_year=2028, shock_pct=0.08, strategy_hint="balanced")
+        even = simulate_fixed_strategy("even", rho=0.97, gamma_utility=1.0)
+        front = simulate_fixed_strategy("front_load", rho=0.97, gamma_utility=1.0)
+        back = simulate_fixed_strategy("back_load", rho=0.97, gamma_utility=1.0)
+
+    if opt is None or "path" not in opt or opt["path"].empty:
+        st.error("Chưa tạo được nghiệm tối ưu động để phân tích. Hãy kiểm tra scipy hoặc ràng buộc mô hình.")
+        return
+
+    path = opt["path"]
+    params = opt["params"]
+    checks = check_path_constraints(path, params)
+    loading = classify_loading_pattern(path)
+    decomp, decomp_long, avg_decomp = calculate_growth_decomposition(path)
+    cockpit = investment_policy_matrix(path)
+
+    strategy_df = pd.DataFrame([
+        {"Chiến lược": "Tối ưu SLSQP", "Welfare": opt["welfare"], "Y_2035": path["Y"].iloc[-1], "C_2035": path["C"].iloc[-1], "K_2035": path["K"].iloc[-1], "AI_2035": path["AI"].iloc[-1], "H_2035": path["H"].iloc[-1]},
+        {"Chiến lược": "Đầu tư trải đều", "Welfare": even["welfare"], "Y_2035": even["path"]["Y"].iloc[-1], "C_2035": even["path"]["C"].iloc[-1], "K_2035": even["path"]["K"].iloc[-1], "AI_2035": even["path"]["AI"].iloc[-1], "H_2035": even["path"]["H"].iloc[-1]},
+        {"Chiến lược": "Front-load", "Welfare": front["welfare"], "Y_2035": front["path"]["Y"].iloc[-1], "C_2035": front["path"]["C"].iloc[-1], "K_2035": front["path"]["K"].iloc[-1], "AI_2035": front["path"]["AI"].iloc[-1], "H_2035": front["path"]["H"].iloc[-1]},
+        {"Chiến lược": "Back-load", "Welfare": back["welfare"], "Y_2035": back["path"]["Y"].iloc[-1], "C_2035": back["path"]["C"].iloc[-1], "K_2035": back["path"]["K"].iloc[-1], "AI_2035": back["path"]["AI"].iloc[-1], "H_2035": back["path"]["H"].iloc[-1]},
+    ])
+
+    ai_h_ratio = path["I_AI"] / (path["I_H"] + 1e-9)
+    invest_share = path["Total_investment"] / (path["Y"] + 1e-9)
+    consumption_share = path["C"] / (path["Y"] + 1e-9)
+    top_growth_driver = avg_decomp.sort_values("Đóng góp bình quân", ascending=False).iloc[0]
+    best_strategy = strategy_df.sort_values("Welfare", ascending=False).iloc[0]
+
+    shock_loss_2035 = np.nan
+    shock_loss_pct = np.nan
+    if shock is not None and "path" in shock:
+        shock_loss_2035 = path["Y"].iloc[-1] - shock["path"]["Y"].iloc[-1]
+        shock_loss_pct = shock_loss_2035 / (path["Y"].iloc[-1] + 1e-9) * 100
+
+    metrics = {
+        "Trang_thai_toi_uu": str("Optimal" if opt["success"] else "Check_required"),
+        "Welfare": float(opt["welfare"]),
+        "Y_2026": float(path["Y"].iloc[0]),
+        "Y_2035": float(path["Y"].iloc[-1]),
+        "Tang_Y_2026_2035_pct": float(_safe_pct_change(path["Y"].iloc[-1], path["Y"].iloc[0])),
+        "C_2035": float(path["C"].iloc[-1]),
+        "K_2035": float(path["K"].iloc[-1]),
+        "D_2035": float(path["D"].iloc[-1]),
+        "AI_2035": float(path["AI"].iloc[-1]),
+        "H_2035": float(path["H"].iloc[-1]),
+        "TFP_2035": float(path["A_TFP"].iloc[-1]),
+        "Investment_share_avg": float(invest_share.mean()),
+        "Consumption_share_avg": float(consumption_share.mean()),
+        "AI_H_ratio_avg": float(ai_h_ratio.mean()),
+        "AI_H_ratio_std": float(ai_h_ratio.std()),
+        "Loading_pattern": str(loading["pattern"]),
+        "Top_growth_driver": str(top_growth_driver["Nguồn đóng góp"]),
+        "Best_strategy_by_welfare": str(best_strategy["Chiến lược"]),
+        "Shock_2028_Y2035_loss_pct": float(shock_loss_pct) if not np.isnan(shock_loss_pct) else 0.0,
+        "All_constraints_ok": bool(checks[["budget_ok", "investment_cap_ok", "consumption_floor_ok", "H_floor_ok", "D_AI_floor_ok"]].all().all()),
+    }
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Welfare", f"{metrics['Welfare']:.3f}")
+    c2.metric("Y 2035", f"{metrics['Y_2035']:,.2f}")
+    c3.metric("Mẫu hình đầu tư", metrics["Loading_pattern"])
+    c4.metric("AI/H bình quân", f"{metrics['AI_H_ratio_avg']:.3f}")
+
+    st.subheader("Bảng AI đọc nhanh: policy intelligence")
+    intelligence = build_dynamic_policy_intelligence(path, strategy_df=strategy_df, shock=shock)
+    st.dataframe(intelligence, use_container_width=True)
+
+    st.subheader("Ma trận hành động chính sách")
+    action_matrix = build_dynamic_action_matrix(path)
+    st.dataframe(action_matrix, use_container_width=True)
+
+    st.subheader("Bảng so sánh chiến lược")
+    st.dataframe(strategy_df.round(3), use_container_width=True)
+
+    st.subheader("Phân rã đóng góp tăng trưởng bình quân")
+    st.dataframe(avg_decomp.round(5), use_container_width=True)
+
+    fig_ratio = px.line(
+        path.assign(AI_H_ratio=ai_h_ratio, Investment_share=invest_share, Consumption_share=consumption_share),
+        x="year",
+        y=["AI_H_ratio", "Investment_share", "Consumption_share"],
+        markers=True,
+        title="AI/H, tỷ trọng đầu tư và tỷ trọng tiêu dùng theo thời gian",
+    )
+    fig_ratio.update_layout(height=500)
+    st.plotly_chart(fig_ratio, use_container_width=True)
+
+    ai_result_table = path[[
+        "year", "Y", "C", "K", "D", "AI", "H", "A_TFP", "Total_investment",
+        "IK_share", "ID_share", "IAI_share", "IH_share"
+    ]].copy()
+    ai_result_table["AI_H_ratio"] = ai_h_ratio
+    ai_result_table["Investment_share"] = invest_share
+    ai_result_table["Consumption_share"] = consumption_share
+
+    policy_questions = (
+        "Quỹ đạo tối ưu có front-loaded hay back-loaded không, và vì sao mô hình đề xuất như vậy? "
+        "Tỷ lệ đầu tư AI/đầu tư H có ổn định không, và đào tạo nhân lực nên đi trước hay đồng thời với đầu tư AI? "
+        "Khi ρ cao, chính phủ có nên ưu tiên đầu tư dài hạn vào D, AI, H hơn so với tiêu dùng hiện tại không? "
+        "Nếu xảy ra cú sốc năm 2028, nên bảo vệ tiêu dùng hay bảo vệ đầu tư chiến lược trước? "
+        "Chiến lược front-load, back-load và trải đều khác nhau thế nào về welfare và năng lực sản xuất 2035?"
+    )
+
+    if AI_AGENT_AVAILABLE:
+        render_ai_agent(
+            bai_name="Bài 8 — Tối ưu động phân bổ liên thời gian 2026–2035",
+            model_goal=(
+                "Tìm quỹ đạo tiêu dùng và đầu tư vào K, D, AI, H trong giai đoạn 2026–2035 "
+                "để tối đa hóa phúc lợi liên thời gian, đồng thời đánh giá front-load/back-load, "
+                "cân bằng AI - nhân lực số, cú sốc 2028 và hàm ý chính sách dài hạn."
+            ),
+            metrics=metrics,
+            result_table=ai_result_table.round(4),
+            policy_questions=policy_questions,
+            key_suffix="bai8",
+        )
+    else:
+        st.warning(
+            "Chưa tìm thấy file `ai_agent.py` hoặc import AI Agent bị lỗi. "
+            "Tab AI vẫn đã được tạo; hãy đặt `ai_agent.py` cùng cấp với `app.py` để kích hoạt phân tích Gemini."
+        )
+
 # ---------------------------------------------------------
 # 8. HÀM RENDER CHÍNH
 # ---------------------------------------------------------
@@ -1160,7 +1409,13 @@ def render():
     Mục tiêu là tìm quỹ đạo tiêu dùng và đầu tư vào **K, D, AI, H** sao cho tổng phúc lợi xã hội 2026–2035 cao nhất.
     """)
 
-    tabs = st.tabs(["8.1 Bối cảnh", "8.2 Mô hình toán học", "8.3 Giải lập trình", "8.4 Chính sách"])
+    tabs = st.tabs([
+        "8.1 Bối cảnh",
+        "8.2 Mô hình toán học",
+        "8.3 Giải lập trình",
+        "8.4 Chính sách",
+        "🤖 AI Analyst",
+    ])
 
     with tabs[0]:
         show_context()
@@ -1170,3 +1425,5 @@ def render():
         show_programming_solution()
     with tabs[3]:
         show_policy_discussion()
+    with tabs[4]:
+        show_ai_policy_analysis()
