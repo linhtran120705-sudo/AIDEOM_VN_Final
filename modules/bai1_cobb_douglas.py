@@ -790,3 +790,42 @@ def render():
         )
         scenario_2030 = simulate_2030(df_model, alpha, beta, gamma, delta, theta)
         show_policy_discussion(df_model, ga_summary, scenario_2030)
+    with tabs[5]:
+    df_model, A_bar, mape = calculate_model(df, alpha, beta, gamma, delta, theta)
+    ga, ga_summary, avg_growth = calculate_growth_accounting(
+        df_model, alpha, beta, gamma, delta, theta
+    )
+    scenario_2030 = simulate_2030(df_model, alpha, beta, gamma, delta, theta)
+
+    y_2025 = df_model.loc[df_model["year"] == 2025, "Y"].iloc[0]
+    y_2030 = scenario_2030.loc[scenario_2030["year"] == 2030, "Y_forecast"].iloc[0]
+    growth_2030 = (y_2030 / y_2025 - 1) * 100
+
+    render_ai_agent(
+        bai_name="Bài 1 — Hàm sản xuất Cobb-Douglas mở rộng với AI và số hóa",
+        model_goal=(
+            "Ước lượng TFP, kiểm tra sai số dự báo GDP, phân rã tăng trưởng "
+            "và mô phỏng kịch bản GDP Việt Nam đến năm 2030."
+        ),
+        metrics={
+            "A_bar": float(A_bar),
+            "MAPE_pct": float(mape),
+            "avg_growth_log_pct": float(avg_growth),
+            "GDP_2025": float(y_2025),
+            "GDP_2030_forecast": float(y_2030),
+            "GDP_growth_2025_2030_pct": float(growth_2030),
+            "alpha_K": float(alpha),
+            "beta_L": float(beta),
+            "gamma_D": float(gamma),
+            "delta_AI": float(delta),
+            "theta_H": float(theta),
+        },
+        result_table=ga_summary.round(3),
+        policy_questions=(
+            "TFP tăng hay giảm và điều đó nói gì về chất lượng tăng trưởng? "
+            "Trong ba yếu tố D, AI, H, yếu tố nào đóng góp nhiều nhất? "
+            "Mục tiêu kinh tế số đạt 30% GDP vào năm 2030 có khả thi không? "
+            "Từ kết quả mô hình, cần ưu tiên chính sách nào cho Việt Nam?"
+        ),
+        key_suffix="bai1"
+    )
