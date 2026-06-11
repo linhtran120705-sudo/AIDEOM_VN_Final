@@ -12,7 +12,7 @@ load_dotenv()
 
 
 # =========================================================
-# 1. HÀM LẤY CẤU HÌNH GEMINI
+# 1. HÀM LẤY CẤU HÌNH GEMINI VÀ THÔNG TIN CHỦ WEB
 # =========================================================
 def _get_secret_value(key: str) -> Optional[str]:
     """
@@ -45,7 +45,107 @@ def _get_gemini_model() -> str:
     return (
         _get_secret_value("GEMINI_MODEL")
         or os.getenv("GEMINI_MODEL")
-        or "gemini-3.5-flash"
+        or "gemini-2.5-flash"
+    )
+
+
+def _get_web_owner_contact() -> str:
+    """
+    Thông tin liên hệ chủ sở hữu web.
+    Không bắt buộc. Có thể cấu hình trong Streamlit Secrets hoặc .env:
+    WEB_OWNER_CONTACT = "email hoặc tên nhóm quản trị"
+    """
+    return (
+        _get_secret_value("WEB_OWNER_CONTACT")
+        or os.getenv("WEB_OWNER_CONTACT")
+        or "chủ sở hữu website / nhóm phát triển dashboard"
+    )
+
+
+def _show_missing_api_key_warning() -> None:
+    """
+    Cảnh báo khi chưa có GEMINI_API_KEY.
+    Hiển thị cho người dùng web để họ biết cần báo chủ sở hữu web.
+    """
+    owner_contact = _get_web_owner_contact()
+
+    st.warning(
+        """
+        Chưa cấu hình **GEMINI_API_KEY**, nên tác nhân Gemini chưa thể chạy trực tiếp.
+        Website vẫn hoạt động bằng chế độ **phân tích offline dự phòng**.
+        """
+    )
+
+    st.info(
+        f"""
+        **Hướng xử lý:** vui lòng thông báo cho **{owner_contact}** bổ sung `GEMINI_API_KEY`
+        trong **Streamlit Secrets** hoặc file `.env` để kích hoạt tác nhân Gemini.
+        """
+    )
+
+
+def _show_quota_warning() -> None:
+    """
+    Cảnh báo khi API bị hết quota, hết token hoặc quá giới hạn request.
+    """
+    owner_contact = _get_web_owner_contact()
+
+    st.error(
+        """
+        Gemini hiện chưa thể phản hồi vì API có thể đã **hết quota**, **hết token**,
+        hoặc vượt giới hạn số lượt gọi trong thời gian ngắn.
+        """
+    )
+
+    st.info(
+        f"""
+        **Hướng xử lý:** vui lòng thông báo cho **{owner_contact}** kiểm tra lại hạn mức Gemini API,
+        billing/quota, hoặc thay API key/model khác trong **Streamlit Secrets**.
+        Trong thời gian chờ xử lý, website sẽ tự chuyển sang chế độ phân tích offline.
+        """
+    )
+
+
+def _show_model_overload_warning() -> None:
+    """
+    Cảnh báo khi model Gemini bị quá tải 503.
+    """
+    owner_contact = _get_web_owner_contact()
+
+    st.warning(
+        """
+        Model Gemini đang quá tải tạm thời do nhu cầu sử dụng cao.
+        Đây không phải lỗi dữ liệu hoặc lỗi giao diện dashboard.
+        """
+    )
+
+    st.info(
+        f"""
+        Người dùng có thể thử lại sau vài phút. Nếu lỗi lặp lại nhiều lần,
+        vui lòng thông báo cho **{owner_contact}** đổi `GEMINI_MODEL`
+        sang model nhẹ hơn, ví dụ `gemini-2.5-flash`.
+        """
+    )
+
+
+def _show_invalid_key_warning() -> None:
+    """
+    Cảnh báo khi API key sai, hết hạn hoặc chưa được cấp quyền.
+    """
+    owner_contact = _get_web_owner_contact()
+
+    st.error(
+        """
+        Gemini API key có thể không hợp lệ, hết hạn, bị sai định dạng
+        hoặc chưa được cấp quyền sử dụng model hiện tại.
+        """
+    )
+
+    st.info(
+        f"""
+        **Hướng xử lý:** vui lòng thông báo cho **{owner_contact}** kiểm tra lại `GEMINI_API_KEY`
+        trong Streamlit Secrets, bảo đảm key còn hiệu lực và không bị copy thiếu ký tự.
+        """
     )
 
 
@@ -79,7 +179,7 @@ def _safe_metrics(metrics: Optional[Dict[str, Any]]) -> Dict[str, Any]:
 def _safe_table_preview(result_table: Any, max_rows: int = 8) -> str:
     """
     Chuyển bảng kết quả thành text ngắn để gửi cho Gemini.
-    Dùng to_string thay vì to_markdown để không cần thêm thư viện tabulate.
+    Dùng to_string để không cần thêm thư viện tabulate.
     """
     if result_table is None:
         return "Không có bảng kết quả."
@@ -177,7 +277,9 @@ def gemini_policy_analysis(
     Nếu lỗi thì trả về None để app chuyển sang chế độ offline.
     """
     api_key = _get_gemini_key()
+
     if not api_key:
+        _show_missing_api_key_warning()
         return None
 
     try:
@@ -231,10 +333,59 @@ Viết khoảng 500-800 từ.
         if response is not None and getattr(response, "text", None):
             return response.text
 
+        st.warning(
+            "Gemini không trả về nội dung phân tích. Website sẽ chuyển sang chế độ offline dự phòng."
+        )
         return None
 
     except Exception as error:
-        st.error(f"Lỗi khi gọi Gemini: {error}")
+        error_text = str(error)
+
+        if (
+            "429" in error_text
+            or "RESOURCE_EXHAUSTED" in error_text
+            or "quota" in error_text.lower()
+            or "rate limit" in error_text.lower()
+            or "token" in error_text.lower()
+        ):
+            _show_quota_warning()
+
+        elif (
+            "503" in error_text
+            or "UNAVAILABLE" in error_text
+            or "high demand" in error_text.lower()
+            or "overloaded" in error_text.lower()
+        ):
+            _show_model_overload_warning()
+
+        elif (
+            "401" in error_text
+            or "403" in error_text
+            or "API_KEY_INVALID" in error_text
+            or "PERMISSION_DENIED" in error_text
+            or "invalid api key" in error_text.lower()
+        ):
+            _show_invalid_key_warning()
+
+        elif (
+            "404" in error_text
+            or "not found" in error_text.lower()
+            or "model" in error_text.lower()
+        ):
+            st.error(
+                "Không gọi được Gemini vì model hiện tại có thể không tồn tại "
+                "hoặc chưa được tài khoản API key hỗ trợ."
+            )
+            st.info(
+                "Chủ sở hữu web nên kiểm tra biến `GEMINI_MODEL` trong Streamlit Secrets. "
+                "Có thể thử đổi về `gemini-2.5-flash`."
+            )
+
+        else:
+            st.error("Lỗi khi gọi Gemini. Website sẽ chuyển sang chế độ offline dự phòng.")
+            with st.expander("Xem chi tiết lỗi kỹ thuật"):
+                st.code(error_text)
+
         return None
 
 
@@ -269,9 +420,10 @@ def render_ai_agent(
     if gemini_ready:
         st.success("Đã nhận GEMINI_API_KEY. Có thể gọi Gemini.")
     else:
-        st.warning("Chưa nhận GEMINI_API_KEY. App vẫn chạy được bằng chế độ phân tích offline.")
+        _show_missing_api_key_warning()
 
     default_index = 1 if gemini_ready else 0
+
     mode = st.radio(
         "Chọn chế độ phân tích",
         [
@@ -298,7 +450,8 @@ def render_ai_agent(
 
                 if text is None:
                     st.warning(
-                        "Chưa gọi được Gemini. App tự chuyển sang chế độ phân tích offline để không bị lỗi."
+                        "Gemini chưa thể tạo phân tích ở thời điểm này. "
+                        "Website tự chuyển sang chế độ phân tích offline để không gián đoạn trải nghiệm người dùng."
                     )
 
             if text is None:
