@@ -19,6 +19,14 @@ except Exception:
     SB3_AVAILABLE = False
 
 
+try:
+    from ai_agent import render_ai_agent
+    AI_AGENT_AVAILABLE = True
+except Exception:
+    render_ai_agent = None
+    AI_AGENT_AVAILABLE = False
+
+
 # =========================================================
 # BÀI 11 — Q-LEARNING CHO CHÍNH SÁCH KINH TẾ THÍCH NGHI
 # Vietnam Economy as a Markov Decision Process
@@ -1594,6 +1602,352 @@ def show_policy_discussion():
     """)
 
 
+
+# ---------------------------------------------------------
+# 4.5. AI ANALYST — PHÂN TÍCH CHÍNH SÁCH THÔNG MINH
+# ---------------------------------------------------------
+def _action_policy_note(action_id):
+    notes = {
+        0: "Ưu tiên vốn vật chất; phù hợp khi cần củng cố hạ tầng cơ bản nhưng có thể chậm tạo năng lực số.",
+        1: "Cân bằng K/D/AI/H; phù hợp khi cần chính sách dễ giải trình, giảm rủi ro lệch công nghệ.",
+        2: "Số hóa nhanh; phù hợp khi nền tảng số còn yếu và cần quick win về dữ liệu, dịch vụ số, giao dịch số.",
+        3: "AI dẫn dắt; phù hợp khi D, AI và H đã đủ nền, nhưng cần kiểm soát thất nghiệp chuyển tiếp và cyber risk.",
+        4: "Bao trùm; phù hợp khi rủi ro thất nghiệp cao, cần đào tạo lại và tăng khả năng hấp thụ công nghệ.",
+    }
+    return notes.get(int(action_id), "Cần kiểm tra thêm điều kiện trạng thái và giả định reward.")
+
+
+def _safe_round_df(df, digits=4):
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        return pd.DataFrame()
+    out = df.copy()
+    num_cols = out.select_dtypes(include=[np.number]).columns
+    out[num_cols] = out[num_cols].round(digits)
+    return out
+
+
+def build_ai_policy_intelligence(episodes=3000, seed=42, shock_prob=0.12):
+    """
+    Xây dựng gói dữ liệu cho tab AI Analyst.
+    Hàm này cố ý tách khỏi show_training_solution để tab AI vẫn chạy độc lập,
+    không phụ thuộc người dùng đã bấm/chạy tab 11.3 hay chưa.
+    """
+    if not GYM_AVAILABLE:
+        result_table = pd.DataFrame({
+            "Nội dung": [
+                "Thiếu thư viện gymnasium",
+                "Cách xử lý",
+            ],
+            "Khuyến nghị": [
+                "Tab AI Analyst đã được tạo nhưng chưa thể huấn luyện Q-learning.",
+                "Thêm `gymnasium` vào requirements.txt rồi chạy lại Streamlit.",
+            ],
+        })
+        metrics = {
+            "Trang_thai_AI_tab": "Chua_chay_duoc_do_thieu_gymnasium",
+            "So_trang_thai_MDP": 81,
+            "So_hanh_dong": 5,
+        }
+        return {
+            "metrics": metrics,
+            "result_table": result_table,
+            "policy_questions": (
+                "Khi thiếu gymnasium, cần bổ sung dependency nào để chạy Q-learning? "
+                "Vì sao tab AI vẫn nên hiển thị cảnh báo thay vì biến mất?"
+            ),
+            "selected_states": result_table,
+            "policy_df": pd.DataFrame(),
+            "compare_summary": pd.DataFrame(),
+            "action_counts": pd.DataFrame(),
+            "curve": pd.DataFrame(),
+        }
+
+    result = train_q_learning(
+        episodes=int(episodes),
+        alpha=0.10,
+        gamma=0.95,
+        eps_start=1.0,
+        eps_end=0.05,
+        eps_decay_episodes=max(1000, min(5000, int(episodes) // 2)),
+        seed=int(seed),
+        shock_prob=float(shock_prob),
+    )
+
+    Q = result["Q"]
+    curve = result["curve"]
+    policy_df = extract_policy(Q)
+    selected_states = policy_for_selected_states(Q)
+
+    # Đánh giá nhanh chính sách để tránh tab AI quá nặng trên Streamlit Cloud.
+    compare_df, trace_df = evaluate_multiple_policies(
+        Q,
+        episodes=200,
+        seed=int(seed) + 2026,
+        shock_prob=float(shock_prob),
+    )
+
+    compare_summary = compare_df.groupby("policy_label", as_index=False).agg(
+        mean_reward=("total_reward", "mean"),
+        std_reward=("total_reward", "std"),
+        min_reward=("total_reward", "min"),
+        max_reward=("total_reward", "max"),
+    ).sort_values("mean_reward", ascending=False)
+
+    action_counts = policy_df.groupby("best_action_label", as_index=False).agg(
+        n_states=("state_label", "count")
+    )
+    action_counts["share_pct"] = action_counts["n_states"] / 81 * 100
+
+    selected_states = selected_states.copy()
+    selected_states["AI_Policy_Note"] = selected_states["chosen_action"].apply(_action_policy_note)
+
+    # Tạo bảng hành động chính sách theo trạng thái, ngắn gọn để đưa vào AI Agent.
+    result_table = selected_states[[
+        "case",
+        "state_label",
+        "chosen_action_label",
+        "max_Q",
+        "AI_Policy_Note",
+        "interpretation",
+    ]].copy()
+
+    # Metrics an toàn cho render_ai_agent.
+    q_mean = compare_summary.loc[
+        compare_summary["policy_label"] == "π* Q-learning", "mean_reward"
+    ]
+    a1_mean = compare_summary.loc[
+        compare_summary["policy_label"] == "Rule a1 — Cân bằng", "mean_reward"
+    ]
+    a3_mean = compare_summary.loc[
+        compare_summary["policy_label"] == "Rule a3 — AI dẫn dắt", "mean_reward"
+    ]
+
+    q_mean_val = float(q_mean.iloc[0]) if len(q_mean) else np.nan
+    a1_mean_val = float(a1_mean.iloc[0]) if len(a1_mean) else np.nan
+    a3_mean_val = float(a3_mean.iloc[0]) if len(a3_mean) else np.nan
+
+    top_action_row = action_counts.sort_values("n_states", ascending=False).iloc[0]
+    vn2026_row = selected_states[selected_states["case"] == "Việt Nam 2026 thực tế"].iloc[0]
+
+    first_reward = float(curve["rolling_reward_200"].head(200).mean())
+    last_reward = float(curve["rolling_reward_200"].tail(200).mean())
+
+    metrics = {
+        "So_trang_thai_MDP": 81,
+        "So_hanh_dong": 5,
+        "Episodes_AI_tab": int(episodes),
+        "Shock_probability": float(shock_prob),
+        "Reward_Q_learning_mean": q_mean_val,
+        "Reward_rule_can_bang_a1_mean": float(a1_mean_val),
+        "Reward_rule_AI_dan_dat_a3_mean": float(a3_mean_val),
+        "Chenh_lech_Q_so_voi_a1": float(q_mean_val - a1_mean_val) if np.isfinite(a1_mean_val) else np.nan,
+        "Chenh_lech_Q_so_voi_a3": float(q_mean_val - a3_mean_val) if np.isfinite(a3_mean_val) else np.nan,
+        "Action_pho_bien_nhat_pi_star": str(top_action_row["best_action_label"]),
+        "Ty_le_action_pho_bien_nhat_pct": float(top_action_row["share_pct"]),
+        "Action_VietNam_2026": str(vn2026_row["chosen_action_label"]),
+        "Training_reward_rolling_200_dau": first_reward,
+        "Training_reward_rolling_200_cuoi": last_reward,
+        "Muc_cai_thien_learning_curve": float(last_reward - first_reward),
+    }
+
+    policy_questions = (
+        "Chính sách Q-learning có tạo reward trung bình cao hơn các rule-based policies không? "
+        "Ở trạng thái Việt Nam 2026, agent chọn hành động nào và hàm ý chính sách là gì? "
+        "Khi GDP thấp, số hóa thấp và thất nghiệp cao, chính sách nên quick win bằng số hóa, bao trùm hay AI dẫn dắt? "
+        "Làm thế nào tích hợp π*(s) vào quy trình hoạch định mà không thay thế trách nhiệm chính trị - xã hội?"
+    )
+
+    return {
+        "metrics": metrics,
+        "result_table": result_table,
+        "policy_questions": policy_questions,
+        "selected_states": selected_states,
+        "policy_df": policy_df,
+        "compare_summary": compare_summary,
+        "action_counts": action_counts,
+        "curve": curve,
+        "trace_df": trace_df,
+    }
+
+
+def show_ai_policy_analysis():
+    st.header("🤖 AI Analyst — Phân tích chính sách Q-learning nâng cao")
+
+    sticker_header(
+        "🤖🧭",
+        "AI Analyst cho Bài 11",
+        "Tab này tự huấn luyện Q-learning ở cấu hình nhẹ hơn, trích xuất π*(s), so sánh với chính sách rule-based và chuyển kết quả thành khuyến nghị chính sách."
+    )
+
+    if not GYM_AVAILABLE:
+        st.error("Chưa cài `gymnasium`, nên chưa thể chạy Q-learning. Tab AI vẫn được tạo để không bị mất thanh phân tích.")
+        st.code("gymnasium\nstable-baselines3", language="text")
+
+        payload = build_ai_policy_intelligence()
+        st.dataframe(payload["result_table"], use_container_width=True)
+
+        if AI_AGENT_AVAILABLE:
+            render_ai_agent(
+                bai_name="Bài 11 — Q-learning cho chính sách kinh tế thích nghi",
+                model_goal=(
+                    "Mô phỏng nền kinh tế Việt Nam như một MDP, dùng Q-learning để đề xuất chính sách "
+                    "phân bổ K/D/AI/H theo trạng thái kinh tế."
+                ),
+                metrics=payload["metrics"],
+                result_table=payload["result_table"],
+                policy_questions=payload["policy_questions"],
+                key_suffix="bai11",
+            )
+        else:
+            st.warning("Chưa tìm thấy `ai_agent.py`. Hãy đặt `ai_agent.py` cùng cấp với `app.py`.")
+        return None
+
+    c1, c2, c3 = st.columns(3)
+    episodes_ai = c1.number_input(
+        "Episodes cho AI Analyst",
+        min_value=1000,
+        max_value=10000,
+        value=3000,
+        step=1000,
+        key="bai11_ai_episodes",
+    )
+    shock_ai = c2.slider(
+        "Xác suất cú sốc cho AI Analyst",
+        min_value=0.00,
+        max_value=0.40,
+        value=0.12,
+        step=0.02,
+        key="bai11_ai_shock_prob",
+    )
+    seed_ai = c3.number_input(
+        "Seed AI Analyst",
+        min_value=1,
+        max_value=99999,
+        value=42,
+        step=1,
+        key="bai11_ai_seed",
+    )
+
+    with st.spinner("Đang tạo phân tích AI cho Bài 11..."):
+        payload = build_ai_policy_intelligence(
+            episodes=int(episodes_ai),
+            seed=int(seed_ai),
+            shock_prob=float(shock_ai),
+        )
+
+    metrics = payload["metrics"]
+    result_table = payload["result_table"]
+    selected_states = payload["selected_states"]
+    compare_summary = payload["compare_summary"]
+    action_counts = payload["action_counts"]
+    curve = payload["curve"]
+
+    st.subheader("1️⃣ Chỉ báo AI Policy Intelligence")
+
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Trạng thái MDP", f"{metrics['So_trang_thai_MDP']}")
+    m2.metric("Hành động", f"{metrics['So_hanh_dong']}")
+    m3.metric("Reward π*", f"{metrics['Reward_Q_learning_mean']:.3f}")
+    m4.metric("Action VN 2026", metrics["Action_VietNam_2026"].split("—")[-1].strip())
+
+    m5, m6, m7, m8 = st.columns(4)
+    m5.metric("π* - a1", f"{metrics['Chenh_lech_Q_so_voi_a1']:.3f}")
+    m6.metric("π* - a3", f"{metrics['Chenh_lech_Q_so_voi_a3']:.3f}")
+    m7.metric("Action phổ biến", metrics["Action_pho_bien_nhat_pi_star"].split("—")[-1].strip())
+    m8.metric("Tỷ lệ action phổ biến", f"{metrics['Ty_le_action_pho_bien_nhat_pct']:.1f}%")
+
+    st.subheader("2️⃣ Bảng 11.AI — Khuyến nghị chính sách tại các trạng thái trọng yếu")
+    st.dataframe(_safe_round_df(result_table), use_container_width=True)
+
+    st.subheader("3️⃣ So sánh π*(s) với rule-based policies")
+    st.dataframe(_safe_round_df(compare_summary), use_container_width=True)
+
+    fig_compare_ai = px.bar(
+        compare_summary,
+        x="policy_label",
+        y="mean_reward",
+        error_y="std_reward",
+        color="policy_label",
+        text="mean_reward",
+        title="AI Analyst — Reward trung bình: Q-learning vs rule-based"
+    )
+    fig_compare_ai.update_traces(texttemplate="%{text:.3f}", textposition="outside")
+    fig_compare_ai.update_layout(height=470, xaxis_title="Chính sách", yaxis_title="Mean reward", showlegend=False)
+    st.plotly_chart(fig_compare_ai, use_container_width=True)
+
+    st.subheader("4️⃣ Phân bố hành động tối ưu trên 81 trạng thái")
+    st.dataframe(_safe_round_df(action_counts), use_container_width=True)
+
+    fig_action_ai = px.pie(
+        action_counts,
+        names="best_action_label",
+        values="n_states",
+        hole=0.42,
+        title="AI Analyst — π*(s) ưu tiên hành động nào trên toàn bộ không gian trạng thái?"
+    )
+    fig_action_ai.update_layout(height=500)
+    st.plotly_chart(fig_action_ai, use_container_width=True)
+
+    st.subheader("5️⃣ Learning curve rút gọn")
+    if not curve.empty:
+        fig_curve_ai = px.line(
+            curve,
+            x="episode",
+            y="rolling_reward_200",
+            title="AI Analyst — Rolling reward 200 episodes"
+        )
+        fig_curve_ai.update_layout(height=430, yaxis_title="Rolling reward")
+        st.plotly_chart(fig_curve_ai, use_container_width=True)
+
+    st.subheader("6️⃣ Diễn giải chính sách tự động")
+    if metrics["Chenh_lech_Q_so_voi_a1"] >= 0:
+        policy_card(
+            "✅",
+            "Q-learning có lợi thế so với rule cân bằng",
+            f"Trong mô phỏng nhanh, π* có reward trung bình cao hơn rule a1 khoảng {metrics['Chenh_lech_Q_so_voi_a1']:.3f}. Điều này ủng hộ tư duy chính sách thích nghi theo trạng thái thay vì áp dụng một cấu trúc ngân sách cố định.",
+            "success",
+        )
+    else:
+        policy_card(
+            "⚠️",
+            "Rule cân bằng vẫn cạnh tranh với Q-learning",
+            f"Trong cấu hình hiện tại, π* thấp hơn hoặc xấp xỉ rule a1 khoảng {metrics['Chenh_lech_Q_so_voi_a1']:.3f}. Đây là tín hiệu cần kiểm tra reward weights, số episodes và xác suất cú sốc trước khi dùng kết quả để khuyến nghị mạnh.",
+            "warning",
+        )
+
+    policy_card(
+        "⚖️",
+        "Không tự động hóa quyết định chính sách",
+        "π*(s) chỉ nên là lớp gợi ý kỹ thuật. Trước khi áp dụng, cần kiểm định dữ liệu, phân tích nhạy cảm, tham vấn chuyên gia, đánh giá tác động xã hội và cơ chế chịu trách nhiệm của cơ quan nhà nước.",
+        "danger",
+    )
+
+    if AI_AGENT_AVAILABLE:
+        render_ai_agent(
+            bai_name="Bài 11 — Q-learning cho chính sách kinh tế thích nghi",
+            model_goal=(
+                "Mô phỏng nền kinh tế Việt Nam như một Markov Decision Process; dùng tabular Q-learning "
+                "để học chính sách phân bổ ngân sách K/D/AI/H theo trạng thái GDP, số hóa, năng lực AI "
+                "và rủi ro thất nghiệp; sau đó so sánh π*(s) với các chính sách rule-based."
+            ),
+            metrics=metrics,
+            result_table=_safe_round_df(result_table),
+            policy_questions=payload["policy_questions"],
+            key_suffix="bai11",
+        )
+    else:
+        st.warning("Tab AI Analyst đã được thêm, nhưng chưa tìm thấy `ai_agent.py`. Hãy đặt `ai_agent.py` cùng cấp với `app.py` để dùng phân tích offline/Gemini.")
+
+        st.markdown("""
+        **Phân tích offline tóm tắt:**  
+        Bài 11 cho thấy chính sách tối ưu không nên cố định cho mọi trạng thái. Khi nền tảng số và AI còn thấp,
+        chính sách thiên về số hóa nhanh hoặc bao trùm thường dễ giải thích hơn AI dẫn dắt. Khi nền tảng đã mạnh
+        và thất nghiệp thấp, chính sách có thể chuyển sang củng cố, cân bằng rủi ro và nâng chất lượng quản trị AI.
+        """)
+
+    return payload
+
+
 # ---------------------------------------------------------
 # 5. RENDER
 # ---------------------------------------------------------
@@ -1611,6 +1965,7 @@ def render():
         "11.1 Bối cảnh",
         "11.2 MDP Model",
         "11.3 Q-learning",
+        "🤖 AI Analyst",
         "11.4 Chính sách",
     ])
 
@@ -1624,4 +1979,7 @@ def render():
         show_training_solution()
 
     with tabs[3]:
+        show_ai_policy_analysis()
+
+    with tabs[4]:
         show_policy_discussion()
