@@ -14,6 +14,14 @@ except ImportError:
     PYMOO_AVAILABLE = False
 
 
+try:
+    from ai_agent import render_ai_agent
+    AI_AGENT_AVAILABLE = True
+except Exception:
+    render_ai_agent = None
+    AI_AGENT_AVAILABLE = False
+
+
 # =========================================================
 # BÀI 7 — TỐI ƯU ĐA MỤC TIÊU PARETO VỚI NSGA-II
 # =========================================================
@@ -1072,6 +1080,375 @@ def show_policy_discussion():
     """)
 
 
+
+# ---------------------------------------------------------
+# 9. AI ANALYST — PHÂN TÍCH PARETO VÀ ĐÁNH ĐỔI CHÍNH SÁCH
+# ---------------------------------------------------------
+def build_pareto_policy_intelligence(pareto_df, allocation_df):
+    """
+    Tạo lớp phân tích bổ sung cho Bài 7:
+    - Chọn nghiệm thỏa hiệp bằng TOPSIS.
+    - So sánh các nghiệm cực trị: tăng trưởng, bao trùm, môi trường, an ninh.
+    - Tạo ma trận hành động vùng cho nghiệm thỏa hiệp.
+    - Tạo các kịch bản trọng số để AI Agent có dữ liệu phân tích sâu hơn.
+    """
+
+    if pareto_df is None or pareto_df.empty:
+        return None
+
+    default_weights = [0.40, 0.25, 0.20, 0.15]
+    ranked = topsis_on_pareto(pareto_df, default_weights)
+    compromise = ranked.iloc[0]
+
+    max_growth = pareto_df.sort_values("growth_gain", ascending=False).iloc[0]
+    best_inclusion = pareto_df.sort_values("inequality", ascending=True).iloc[0]
+    best_green = pareto_df.sort_values("emission", ascending=True).iloc[0]
+    best_security = pareto_df.sort_values("security_risk", ascending=True).iloc[0]
+
+    key_solutions = pd.DataFrame([
+        {
+            "Loại nghiệm": "Thỏa hiệp TOPSIS",
+            "solution_id": int(compromise["solution_id"]),
+            "growth_gain": float(compromise["growth_gain"]),
+            "inequality": float(compromise["inequality"]),
+            "emission": float(compromise["emission"]),
+            "security_risk": float(compromise["security_risk"]),
+            "AI_total": float(compromise["AI_total"]),
+            "H_total": float(compromise["H_total"]),
+            "D_total": float(compromise["D_total"]),
+            "I_total": float(compromise["I_total"]),
+            "topsis_score": float(compromise["topsis_score"]),
+        },
+        {
+            "Loại nghiệm": "Tăng trưởng cao nhất",
+            "solution_id": int(max_growth["solution_id"]),
+            "growth_gain": float(max_growth["growth_gain"]),
+            "inequality": float(max_growth["inequality"]),
+            "emission": float(max_growth["emission"]),
+            "security_risk": float(max_growth["security_risk"]),
+            "AI_total": float(max_growth["AI_total"]),
+            "H_total": float(max_growth["H_total"]),
+            "D_total": float(max_growth["D_total"]),
+            "I_total": float(max_growth["I_total"]),
+            "topsis_score": np.nan,
+        },
+        {
+            "Loại nghiệm": "Bao trùm tốt nhất",
+            "solution_id": int(best_inclusion["solution_id"]),
+            "growth_gain": float(best_inclusion["growth_gain"]),
+            "inequality": float(best_inclusion["inequality"]),
+            "emission": float(best_inclusion["emission"]),
+            "security_risk": float(best_inclusion["security_risk"]),
+            "AI_total": float(best_inclusion["AI_total"]),
+            "H_total": float(best_inclusion["H_total"]),
+            "D_total": float(best_inclusion["D_total"]),
+            "I_total": float(best_inclusion["I_total"]),
+            "topsis_score": np.nan,
+        },
+        {
+            "Loại nghiệm": "Phát thải thấp nhất",
+            "solution_id": int(best_green["solution_id"]),
+            "growth_gain": float(best_green["growth_gain"]),
+            "inequality": float(best_green["inequality"]),
+            "emission": float(best_green["emission"]),
+            "security_risk": float(best_green["security_risk"]),
+            "AI_total": float(best_green["AI_total"]),
+            "H_total": float(best_green["H_total"]),
+            "D_total": float(best_green["D_total"]),
+            "I_total": float(best_green["I_total"]),
+            "topsis_score": np.nan,
+        },
+        {
+            "Loại nghiệm": "An ninh tốt nhất",
+            "solution_id": int(best_security["solution_id"]),
+            "growth_gain": float(best_security["growth_gain"]),
+            "inequality": float(best_security["inequality"]),
+            "emission": float(best_security["emission"]),
+            "security_risk": float(best_security["security_risk"]),
+            "AI_total": float(best_security["AI_total"]),
+            "H_total": float(best_security["H_total"]),
+            "D_total": float(best_security["D_total"]),
+            "I_total": float(best_security["I_total"]),
+            "topsis_score": np.nan,
+        },
+    ])
+
+    weight_scenarios = pd.DataFrame({
+        "Kịch bản": [
+            "Mặc định cân bằng",
+            "Tăng trưởng nhanh",
+            "COP26 xanh hóa",
+            "An ninh dữ liệu",
+            "Bao trùm vùng miền",
+        ],
+        "w_growth": [0.40, 0.60, 0.30, 0.30, 0.30],
+        "w_inclusion": [0.25, 0.15, 0.20, 0.15, 0.40],
+        "w_environment": [0.20, 0.10, 0.35, 0.15, 0.15],
+        "w_security": [0.15, 0.15, 0.15, 0.40, 0.15],
+    })
+
+    scenario_rows = []
+    for _, row in weight_scenarios.iterrows():
+        weights = [row["w_growth"], row["w_inclusion"], row["w_environment"], row["w_security"]]
+        tmp_ranked = topsis_on_pareto(pareto_df, weights)
+        best = tmp_ranked.iloc[0]
+        scenario_rows.append({
+            "Kịch bản": row["Kịch bản"],
+            "solution_id": int(best["solution_id"]),
+            "TOPSIS score": float(best["topsis_score"]),
+            "growth_gain": float(best["growth_gain"]),
+            "inequality": float(best["inequality"]),
+            "emission": float(best["emission"]),
+            "security_risk": float(best["security_risk"]),
+            "AI_total": float(best["AI_total"]),
+            "H_total": float(best["H_total"]),
+        })
+    scenario_result = pd.DataFrame(scenario_rows)
+
+    comp_id = int(compromise["solution_id"])
+    comp_alloc = allocation_df[allocation_df["solution_id"] == comp_id].copy()
+
+    alloc_matrix = comp_alloc.pivot(
+        index="Vùng",
+        columns="Hạng mục",
+        values="Ngân sách, tỷ VND"
+    )
+
+    region_profile = alloc_matrix.copy()
+    region_profile["Tổng ngân sách vùng"] = region_profile.sum(axis=1)
+
+    for col in ["Trí tuệ nhân tạo", "Nhân lực số", "Dữ liệu/CĐS doanh nghiệp", "Hạ tầng số"]:
+        if col not in region_profile.columns:
+            region_profile[col] = 0.0
+
+    region_profile["Tỷ trọng AI"] = region_profile["Trí tuệ nhân tạo"] / region_profile["Tổng ngân sách vùng"].replace(0, np.nan)
+    region_profile["Tỷ trọng H"] = region_profile["Nhân lực số"] / region_profile["Tổng ngân sách vùng"].replace(0, np.nan)
+    region_profile["Tỷ trọng D"] = region_profile["Dữ liệu/CĐS doanh nghiệp"] / region_profile["Tổng ngân sách vùng"].replace(0, np.nan)
+    region_profile["Tỷ trọng I"] = region_profile["Hạ tầng số"] / region_profile["Tổng ngân sách vùng"].replace(0, np.nan)
+
+    def classify_region(row):
+        ai_share = row["Tỷ trọng AI"]
+        h_share = row["Tỷ trọng H"]
+        d_share = row["Tỷ trọng D"]
+        i_share = row["Tỷ trọng I"]
+
+        if ai_share >= 0.30 and h_share >= 0.20:
+            return "Tăng tốc AI kèm nhân lực quản trị"
+        if h_share + i_share >= 0.55:
+            return "Xây nền hạ tầng và nhân lực trước"
+        if d_share >= 0.30:
+            return "Ưu tiên dữ liệu/CĐS doanh nghiệp"
+        if ai_share >= 0.30:
+            return "Mở rộng AI nhưng cần kiểm soát rủi ro"
+        return "Phân bổ cân bằng, theo dõi thêm"
+
+    region_profile["Nhóm hành động chính sách"] = region_profile.apply(classify_region, axis=1)
+    region_profile = region_profile.reset_index()
+
+    corr_growth_inclusion = pareto_df["growth_gain"].corr(pareto_df["inequality"])
+    corr_growth_emission = pareto_df["growth_gain"].corr(pareto_df["emission"])
+    corr_ai_security = pareto_df["AI_total"].corr(pareto_df["security_risk"])
+
+    growth_premium = (max_growth["growth_gain"] / compromise["growth_gain"] - 1) * 100 if compromise["growth_gain"] != 0 else np.nan
+    inclusion_cost = (max_growth["inequality"] / compromise["inequality"] - 1) * 100 if compromise["inequality"] > 0 else np.nan
+    emission_cost = (max_growth["emission"] / compromise["emission"] - 1) * 100 if compromise["emission"] > 0 else np.nan
+
+    unique_solutions_by_scenario = scenario_result["solution_id"].nunique()
+
+    metrics = {
+        "So_nghiem_Pareto": int(len(pareto_df)),
+        "Nghiem_thoa_hiep_solution_id": int(compromise["solution_id"]),
+        "TOPSIS_score_thoa_hiep": float(compromise["topsis_score"]),
+        "Growth_gain_thoa_hiep": float(compromise["growth_gain"]),
+        "Inequality_thoa_hiep": float(compromise["inequality"]),
+        "Emission_thoa_hiep": float(compromise["emission"]),
+        "Security_risk_thoa_hiep": float(compromise["security_risk"]),
+        "AI_total_thoa_hiep": float(compromise["AI_total"]),
+        "H_total_thoa_hiep": float(compromise["H_total"]),
+        "Max_growth_solution_id": int(max_growth["solution_id"]),
+        "Growth_premium_vs_compromise_pct": float(growth_premium),
+        "Inclusion_cost_of_max_growth_pct": float(inclusion_cost),
+        "Emission_cost_of_max_growth_pct": float(emission_cost),
+        "Corr_growth_inequality": float(corr_growth_inclusion),
+        "Corr_growth_emission": float(corr_growth_emission),
+        "Corr_AI_security_risk": float(corr_ai_security),
+        "Unique_solutions_when_weights_change": int(unique_solutions_by_scenario),
+    }
+
+    return {
+        "ranked": ranked,
+        "compromise": compromise,
+        "max_growth": max_growth,
+        "key_solutions": key_solutions,
+        "scenario_result": scenario_result,
+        "allocation_matrix": alloc_matrix,
+        "region_profile": region_profile,
+        "metrics": metrics,
+    }
+
+
+def show_ai_policy_analysis():
+    st.header("🤖 AI Analyst — Phân tích Pareto, TOPSIS và đánh đổi chính sách")
+
+    st.markdown("""
+    Tab này bổ sung một lớp phân tích tự động cho Bài 7. Thay vì chỉ hiển thị tập nghiệm Pareto,
+    phần này tóm tắt các nghiệm cực trị, chọn nghiệm thỏa hiệp, phân tích độ nhạy theo trọng số chính sách
+    và tạo dữ liệu đầu vào cho AI Agent diễn giải kết quả.
+    """)
+
+    if not PYMOO_AVAILABLE:
+        st.error("Chưa cài `pymoo`, nên chưa thể tạo tập nghiệm Pareto cho AI Analyst.")
+        st.info("Hãy thêm `pymoo` vào `requirements.txt`, sau đó chạy lại ứng dụng.")
+        return
+
+    with st.spinner("Đang tạo dữ liệu Pareto mặc định cho AI Analyst..."):
+        pareto_df, allocation_df = run_nsga2(
+            total_budget=50000,
+            min_region=5000,
+            max_region=12000,
+            min_h_total=12000,
+            min_d_total=8000,
+            pop_size=100,
+            n_gen=200,
+            seed=42,
+        )
+
+    if pareto_df is None or pareto_df.empty:
+        st.error("Chưa tìm được nghiệm Pareto khả thi để phân tích AI.")
+        st.info("Có thể nới ràng buộc, tăng số thế hệ NSGA-II hoặc kiểm tra lại thư viện `pymoo`.")
+        return
+
+    intelligence = build_pareto_policy_intelligence(pareto_df, allocation_df)
+
+    if intelligence is None:
+        st.error("Không tạo được policy intelligence cho Bài 7.")
+        return
+
+    metrics = intelligence["metrics"]
+    key_solutions = intelligence["key_solutions"]
+    scenario_result = intelligence["scenario_result"]
+    alloc_matrix = intelligence["allocation_matrix"]
+    region_profile = intelligence["region_profile"]
+
+    st.subheader("1. Policy intelligence của tập nghiệm Pareto")
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Số nghiệm Pareto", f"{metrics['So_nghiem_Pareto']}")
+    c2.metric("Nghiệm thỏa hiệp", f"#{metrics['Nghiem_thoa_hiep_solution_id']}")
+    c3.metric("TOPSIS score", f"{metrics['TOPSIS_score_thoa_hiep']:.3f}")
+    c4.metric("Growth gain", f"{metrics['Growth_gain_thoa_hiep']:,.0f}")
+
+    c5, c6, c7 = st.columns(3)
+    c5.metric("Tăng trưởng đổi thêm nếu chọn max-growth", f"{metrics['Growth_premium_vs_compromise_pct']:.2f}%")
+    c6.metric("Bao trùm xấu hơn", f"{metrics['Inclusion_cost_of_max_growth_pct']:.2f}%")
+    c7.metric("Phát thải tăng thêm", f"{metrics['Emission_cost_of_max_growth_pct']:.2f}%")
+
+    st.dataframe(key_solutions.round(3), use_container_width=True)
+
+    fig_key = px.scatter(
+        key_solutions,
+        x="growth_gain",
+        y="inequality",
+        size="emission",
+        color="Loại nghiệm",
+        hover_data=["solution_id", "security_risk", "AI_total", "H_total"],
+        title="Các nghiệm đại diện: tăng trưởng, bao trùm, môi trường, an ninh và thỏa hiệp"
+    )
+    fig_key.update_layout(height=520)
+    st.plotly_chart(fig_key, use_container_width=True)
+
+    st.subheader("2. Độ nhạy khi thay đổi trọng số chính sách")
+
+    st.dataframe(scenario_result.round(3), use_container_width=True)
+
+    fig_scenario = px.parallel_coordinates(
+        scenario_result,
+        dimensions=["growth_gain", "inequality", "emission", "security_risk", "AI_total", "H_total"],
+        color="growth_gain",
+        title="Nghiệm thỏa hiệp thay đổi khi ưu tiên chính sách thay đổi"
+    )
+    fig_scenario.update_layout(height=560)
+    st.plotly_chart(fig_scenario, use_container_width=True)
+
+    if metrics["Unique_solutions_when_weights_change"] == 1:
+        st.success(
+            "Các kịch bản trọng số vẫn chọn cùng một nghiệm thỏa hiệp. Điều này cho thấy nghiệm đề xuất khá vững."
+        )
+    else:
+        st.warning(
+            f"Các kịch bản trọng số chọn {metrics['Unique_solutions_when_weights_change']} nghiệm khác nhau. "
+            "Điều này cho thấy quyết định cuối cùng nhạy với ưu tiên chính sách."
+        )
+
+    st.subheader("3. Ma trận hành động vùng cho nghiệm thỏa hiệp")
+
+    st.dataframe(region_profile.round(3), use_container_width=True)
+
+    fig_region = px.scatter(
+        region_profile,
+        x="Tỷ trọng AI",
+        y="Tỷ trọng H",
+        size="Tổng ngân sách vùng",
+        color="Nhóm hành động chính sách",
+        hover_name="Vùng",
+        title="Ma trận hành động: AI share × H share × quy mô ngân sách vùng"
+    )
+    fig_region.update_layout(height=520)
+    st.plotly_chart(fig_region, use_container_width=True)
+
+    st.markdown("#### Ma trận phân bổ ngân sách của nghiệm thỏa hiệp")
+    st.dataframe(alloc_matrix.round(1), use_container_width=True)
+
+    fig_alloc = px.imshow(
+        alloc_matrix,
+        text_auto=".0f",
+        aspect="auto",
+        title="Heatmap phân bổ ngân sách dùng làm đầu vào cho AI Analyst"
+    )
+    fig_alloc.update_layout(height=540)
+    st.plotly_chart(fig_alloc, use_container_width=True)
+
+    ai_result_table = key_solutions[[
+        "Loại nghiệm",
+        "solution_id",
+        "growth_gain",
+        "inequality",
+        "emission",
+        "security_risk",
+        "AI_total",
+        "H_total",
+        "D_total",
+        "I_total",
+    ]].copy()
+
+    policy_questions = (
+        "Nghiệm thỏa hiệp TOPSIS có cân bằng hợp lý giữa tăng trưởng, bao trùm, môi trường và an ninh dữ liệu không? "
+        "Nếu chọn nghiệm tăng trưởng cao nhất thì chi phí cơ hội về bao trùm vùng miền và phát thải là gì? "
+        "Các vùng nào nên tăng tốc AI, vùng nào nên ưu tiên nhân lực số và hạ tầng trước? "
+        "Khi thay đổi trọng số theo COP26, AI-centric hoặc bao trùm vùng miền, nghiệm được chọn có thay đổi mạnh không? "
+        "NSGA-II nên được dùng như bằng chứng hỗ trợ quyết định chính trị hay có thể thay thế quyết định chính trị?"
+    )
+
+    st.subheader("4. AI Agent phân tích kết quả Bài 7")
+
+    if AI_AGENT_AVAILABLE:
+        render_ai_agent(
+            bai_name="Bài 7 — NSGA-II Pareto cho tối ưu đa mục tiêu kinh tế số và AI",
+            model_goal=(
+                "Tạo tập nghiệm Pareto cho bài toán phân bổ ngân sách kinh tế số Việt Nam, "
+                "cân bằng bốn mục tiêu: tăng trưởng GDP, bao trùm vùng miền, phát thải môi trường "
+                "và rủi ro an ninh dữ liệu. Sau đó dùng TOPSIS để chọn nghiệm thỏa hiệp."
+            ),
+            metrics=metrics,
+            result_table=ai_result_table.round(3),
+            policy_questions=policy_questions,
+            key_suffix="bai7",
+        )
+    else:
+        st.error("Chưa tìm thấy `ai_agent.py`, nên chưa thể hiển thị AI Agent.")
+        st.info("Hãy đặt `ai_agent.py` cùng cấp với `app.py`, rồi chạy lại Streamlit.")
+
+
 # ---------------------------------------------------------
 # 9. RENDER
 # ---------------------------------------------------------
@@ -1089,6 +1466,7 @@ def render():
         "7.3 Tham số",
         "7.4 Giải lập trình",
         "7.5 Chính sách",
+        "🤖 AI Analyst",
     ])
 
     with tabs[0]:
@@ -1105,3 +1483,6 @@ def render():
 
     with tabs[4]:
         show_policy_discussion()
+
+    with tabs[5]:
+        show_ai_policy_analysis()
