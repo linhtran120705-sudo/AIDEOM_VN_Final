@@ -12,11 +12,105 @@ try:
 except ImportError:
     PULP_AVAILABLE = False
 
+try:
+    from ai_agent import render_ai_agent
+    AI_AGENT_AVAILABLE = True
+except Exception:
+    render_ai_agent = None
+    AI_AGENT_AVAILABLE = False
+
 
 # =========================================================
 # BÀI 2 — PHÂN BỔ NGÂN SÁCH ĐƠN GIẢN THEO 4 HẠNG MỤC ĐẦU TƯ SỐ
 # =========================================================
 
+
+# ---------------------------------------------------------
+# 0. GIAO DIỆN RIÊNG CHO BÀI 2
+# ---------------------------------------------------------
+def apply_bai2_theme():
+    """
+    Tạo màu nền riêng cho Bài 2 theo tinh thần ngân sách công, tối ưu hóa và công nghệ số.
+    Tông màu chính: vàng ngân sách - xanh công nghệ - xanh dương dữ liệu.
+    """
+    st.markdown(
+        """
+        <style>
+        .stApp {
+            background:
+                radial-gradient(circle at top left, rgba(251, 191, 36, 0.18), transparent 32%),
+                radial-gradient(circle at top right, rgba(14, 165, 233, 0.16), transparent 30%),
+                linear-gradient(180deg, #fff7ed 0%, #eff6ff 52%, #f8fafc 100%);
+        }
+        .bai2-hero {
+            background: linear-gradient(135deg, #92400e 0%, #0f766e 48%, #1d4ed8 100%);
+            color: white;
+            border-radius: 22px;
+            padding: 26px 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 14px 34px rgba(15, 23, 42, 0.20);
+        }
+        .bai2-hero h1 {
+            margin: 0 0 10px 0;
+            font-size: 36px;
+            font-weight: 900;
+        }
+        .bai2-hero p {
+            font-size: 17px;
+            line-height: 1.65;
+            margin-bottom: 0;
+            opacity: 0.96;
+        }
+        .bai2-badge {
+            display: inline-block;
+            padding: 7px 12px;
+            border-radius: 999px;
+            margin: 10px 8px 0 0;
+            background: rgba(255,255,255,0.16);
+            border: 1px solid rgba(255,255,255,0.26);
+            font-weight: 700;
+            font-size: 13px;
+        }
+        .bai2-card {
+            background: rgba(255,255,255,0.78);
+            border: 1px solid rgba(30, 64, 175, 0.12);
+            border-radius: 18px;
+            padding: 18px 20px;
+            margin: 12px 0;
+            box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+        }
+        .bai2-ai-card {
+            background: linear-gradient(135deg, rgba(255,247,237,0.95), rgba(239,246,255,0.95));
+            border: 1px solid rgba(14, 116, 144, 0.20);
+            border-radius: 18px;
+            padding: 18px 20px;
+            margin: 12px 0 18px 0;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+def show_bai2_hero():
+    st.markdown(
+        """
+        <div class="bai2-hero">
+            <h1>💰 Bài 2 — Tối ưu phân bổ ngân sách số</h1>
+            <p>
+                Bài toán sử dụng quy hoạch tuyến tính để tìm cơ cấu phân bổ ngân sách giữa
+                hạ tầng số, AI và dữ liệu, nhân lực số, R&D công nghệ. Trọng tâm không chỉ là
+                tối đa hóa GDP kỳ vọng, mà còn đánh giá ràng buộc chính sách, chi phí cơ hội
+                và khả năng cân bằng giữa hiệu quả ngắn hạn với năng lực công nghệ dài hạn.
+            </p>
+            <span class="bai2-badge">Linear Programming</span>
+            <span class="bai2-badge">Shadow Price</span>
+            <span class="bai2-badge">Sensitivity Analysis</span>
+            <span class="bai2-badge">Gemini AI Analyst</span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 # ---------------------------------------------------------
 # 1. DỮ LIỆU GỐC CỦA BÀI TOÁN
@@ -661,6 +755,179 @@ def show_programming_solution():
     }
 
 
+
+# ---------------------------------------------------------
+# 8. PHÂN TÍCH MỚI: POLICY INTELLIGENCE + AI ANALYST
+# ---------------------------------------------------------
+def build_policy_intelligence_table(current_result, sens, human_case):
+    """
+    Tạo bảng phân tích chính sách mới mẻ hơn cho Bài 2.
+    Bảng này không thay đổi nghiệm LP, mà giúp đọc nghiệm theo 4 góc:
+    hiệu quả biên, tập trung ngân sách, ràng buộc chiến lược và chi phí cơ hội.
+    """
+    x = current_result["x"]
+    z = current_result["z"]
+    total_budget_used = float(x.sum())
+    ai_rd_share = float((x[1] + x[3]) / total_budget_used * 100)
+    allocation_share = x / total_budget_used
+    hhi = float(np.sum(allocation_share ** 2))
+    z_per_budget = float(z / total_budget_used)
+
+    if sens is not None and len(sens) >= 2:
+        sens_sorted = sens.sort_values("Ngân sách B, nghìn tỷ VND")
+        z_diff = sens_sorted["Z* - GDP kỳ vọng tăng thêm"].iloc[1] - sens_sorted["Z* - GDP kỳ vọng tăng thêm"].iloc[0]
+        b_diff = sens_sorted["Ngân sách B, nghìn tỷ VND"].iloc[1] - sens_sorted["Ngân sách B, nghìn tỷ VND"].iloc[0]
+        marginal_value = float(z_diff / b_diff) if b_diff != 0 else np.nan
+    else:
+        marginal_value = np.nan
+
+    if human_case and human_case.get("success"):
+        base_case = solve_with_scipy(budget=100, min_h=20)
+        opportunity_cost_human = float(human_case["z"] - base_case["z"]) if base_case["success"] else np.nan
+    else:
+        opportunity_cost_human = np.nan
+
+    rows = [
+        {
+            "Góc nhìn phân tích": "Hiệu quả ngân sách",
+            "Chỉ báo": "Z*/ngân sách sử dụng",
+            "Giá trị": z_per_budget,
+            "Diễn giải chính sách": "Cho biết mỗi 1 nghìn tỷ VND ngân sách tạo ra bao nhiêu nghìn tỷ VND GDP kỳ vọng trong nghiệm hiện tại."
+        },
+        {
+            "Góc nhìn phân tích": "Công nghệ chiến lược",
+            "Chỉ báo": "Tỷ trọng AI + R&D (%)",
+            "Giá trị": ai_rd_share,
+            "Diễn giải chính sách": "Đo mức độ ưu tiên cho năng lực công nghệ lõi so với yêu cầu tối thiểu 35%."
+        },
+        {
+            "Góc nhìn phân tích": "Rủi ro tập trung",
+            "Chỉ báo": "HHI cơ cấu ngân sách",
+            "Giá trị": hhi,
+            "Diễn giải chính sách": "HHI càng cao nghĩa là ngân sách càng tập trung vào một vài hạng mục; cần kiểm tra rủi ro lệch pha hạ tầng - nhân lực - R&D."
+        },
+        {
+            "Góc nhìn phân tích": "Giá trị biên ngân sách",
+            "Chỉ báo": "ΔZ*/ΔB xấp xỉ",
+            "Giá trị": marginal_value,
+            "Diễn giải chính sách": "Ước lượng lợi ích biên khi tăng ngân sách trong vùng kịch bản đang xét."
+        },
+        {
+            "Góc nhìn phân tích": "Chi phí cơ hội nhân lực",
+            "Chỉ báo": "ΔZ* khi nâng sàn x₃ từ 20 lên 30",
+            "Giá trị": opportunity_cost_human,
+            "Diễn giải chính sách": "Nếu âm, ưu tiên nhân lực số làm giảm GDP kỳ vọng ngắn hạn nhưng có thể tăng năng lực hấp thụ AI trong dài hạn."
+        },
+    ]
+
+    return pd.DataFrame(rows)
+
+
+def show_ai_policy_analysis():
+    """
+    Tab AI Analyst cho Bài 2.
+    Phần này gọi render_ai_agent từ ai_agent.py; API key được xử lý tập trung trong ai_agent.py.
+    """
+    st.header("2.6. AI Analyst — Phân tích chiến lược ngân sách số")
+
+    st.markdown(
+        """
+        <div class="bai2-ai-card">
+        <b>Điểm mới của phần AI:</b> không chỉ đọc lại nghiệm tối ưu, mà phân tích nghiệm theo
+        ma trận <i>hiệu quả biên - ràng buộc chính sách - chi phí cơ hội - rủi ro tập trung</i>.
+        Cách đọc này phù hợp hơn với quyết định ngân sách công vì một phương án tối ưu về GDP
+        chưa chắc đã tối ưu về năng lực thực thi, nhân lực và công bằng dài hạn.
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    budget = st.session_state.get("bai2_budget_slider", 100)
+    min_h = st.session_state.get("bai2_min_h_slider", 20)
+
+    current_result = solve_with_scipy(budget=budget, min_h=min_h)
+    if not current_result["success"]:
+        st.error("Không thể gọi AI Analyst vì nghiệm hiện tại của Bài 2 không khả thi.")
+        return
+
+    x = current_result["x"]
+    z_value = current_result["z"]
+    result_df = current_result["table"].copy()
+
+    sens_budgets = sorted(set([100, 120, 140, int(budget)]))
+    sens = sensitivity_budget(sens_budgets, min_h=min_h)
+    human_case = solve_with_scipy(budget=100, min_h=30)
+
+    ai_rd_share = float((x[1] + x[3]) / x.sum() * 100)
+    z_per_budget = float(z_value / x.sum())
+    hhi = float(np.sum((x / x.sum()) ** 2))
+
+    intelligence_df = build_policy_intelligence_table(current_result, sens, human_case)
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Z* hiện tại", f"{z_value:,.2f}", "nghìn tỷ VND")
+    c2.metric("AI + R&D", f"{ai_rd_share:.2f}%")
+    c3.metric("Z*/B", f"{z_per_budget:.2f}")
+    c4.metric("HHI ngân sách", f"{hhi:.3f}")
+
+    st.subheader("Ma trận đọc nghiệm tối ưu theo góc nhìn chính sách")
+    st.dataframe(intelligence_df.round(4), use_container_width=True)
+
+    scatter_df = result_df.copy()
+    scatter_df["Tỷ trọng ngân sách, %"] = scatter_df["Phân bổ tối ưu, nghìn tỷ VND"] / scatter_df["Phân bổ tối ưu, nghìn tỷ VND"].sum() * 100
+
+    fig = px.scatter(
+        scatter_df,
+        x="Hệ số tác động GDP",
+        y="Phân bổ tối ưu, nghìn tỷ VND",
+        size="GDP kỳ vọng tạo thêm",
+        color="Hạng mục",
+        hover_data=["Tỷ trọng ngân sách, %", "GDP kỳ vọng tạo thêm"],
+        title="Ảnh 2.9 — Bản đồ hiệu quả biên và quy mô phân bổ ngân sách"
+    )
+    fig.update_layout(height=480)
+    st.plotly_chart(fig, use_container_width=True)
+
+    if not AI_AGENT_AVAILABLE:
+        st.warning(
+            "Chưa tìm thấy file ai_agent.py hoặc hàm render_ai_agent. "
+            "Hãy đặt ai_agent.py cùng cấp với app.py để kích hoạt AI Analyst."
+        )
+        return
+
+    x1, x2, x3, x4 = x
+
+    render_ai_agent(
+        bai_name="Bài 2 — Tối ưu phân bổ ngân sách số bằng quy hoạch tuyến tính",
+        model_goal=(
+            "Tìm phương án phân bổ ngân sách tối ưu cho hạ tầng số, AI và dữ liệu, "
+            "nhân lực số và R&D nhằm tối đa hóa GDP kỳ vọng, đồng thời bảo đảm các sàn đầu tư "
+            "và tỷ trọng tối thiểu cho nhóm công nghệ chiến lược."
+        ),
+        metrics={
+            "Tong_ngan_sach_B": float(budget),
+            "San_nhan_luc_so_x3": float(min_h),
+            "Gia_tri_muc_tieu_Z": float(z_value),
+            "Hieu_qua_Z_tren_ngan_sach": float(z_per_budget),
+            "Dau_tu_ha_tang_so_x1": float(x1),
+            "Dau_tu_AI_du_lieu_x2": float(x2),
+            "Dau_tu_nhan_luc_so_x3": float(x3),
+            "Dau_tu_RD_cong_nghe_x4": float(x4),
+            "Ty_trong_AI_RD_pct": float(ai_rd_share),
+            "Muc_vuot_rang_buoc_AI_RD_pct_point": float(ai_rd_share - 35),
+            "HHI_tap_trung_ngan_sach": float(hhi),
+        },
+        result_table=result_df.round(3),
+        policy_questions=(
+            "Ngân sách nên ưu tiên vào hạng mục nào và vì sao theo hệ số tác động GDP? "
+            "Ràng buộc nào đang định hình nghiệm tối ưu: sàn đầu tư, ngân sách tổng hay tỷ trọng AI + R&D? "
+            "Nếu tăng ngân sách, có nên phân bổ đều cho mọi hạng mục hay nên rót thêm vào hạng mục có hiệu quả biên cao? "
+            "Kết quả có rủi ro tập trung quá mức vào R&D hay không? "
+            "Nếu nâng sàn nhân lực số, chi phí cơ hội ngắn hạn và lợi ích dài hạn cần được hiểu như thế nào?"
+        ),
+        key_suffix="bai2"
+    )
+
 # ---------------------------------------------------------
 # 8. PHẦN 2.5 — THẢO LUẬN CHÍNH SÁCH
 # ---------------------------------------------------------
@@ -809,7 +1076,8 @@ def show_policy_discussion():
 # 9. HÀM RENDER CHÍNH
 # ---------------------------------------------------------
 def render():
-    st.title("💰 Bài 2 — Phân bổ ngân sách đơn giản theo 4 hạng mục đầu tư số")
+    apply_bai2_theme()
+    show_bai2_hero()
 
     st.markdown("""
     Bài 2 sử dụng **quy hoạch tuyến tính — Linear Programming (LP)** để hỗ trợ quyết định phân bổ ngân sách số.
@@ -821,7 +1089,8 @@ def render():
         "2.1 Bối cảnh",
         "2.2 Mô hình toán học",
         "2.4 Giải lập trình",
-        "2.5 Thảo luận chính sách"
+        "2.5 Thảo luận chính sách",
+        "🤖 AI Analyst"
     ])
 
     with tabs[0]:
@@ -835,3 +1104,6 @@ def render():
 
     with tabs[3]:
         show_policy_discussion()
+
+    with tabs[4]:
+        show_ai_policy_analysis()
