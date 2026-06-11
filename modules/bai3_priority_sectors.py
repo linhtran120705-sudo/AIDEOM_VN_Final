@@ -7,6 +7,10 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 
+
+# ---------------------------------------------------------
+# AI ANALYST DÙNG CHUNG TOÀN WEB
+# ---------------------------------------------------------
 try:
     from ai_agent import render_ai_agent
     AI_AGENT_AVAILABLE = True
@@ -298,265 +302,6 @@ def compare_policy_orientations(df):
     )
 
     return growth_result, inclusive_result, comparison
-
-
-# ---------------------------------------------------------
-# 5. PHÂN TÍCH THÔNG MINH CHO AI AGENT
-# ---------------------------------------------------------
-def build_sector_policy_intelligence(df):
-    """
-    Tạo bảng phân tích mới cho Bài 3.
-    Mục tiêu: không chỉ xếp hạng ngành, mà còn đọc kết quả theo góc nhìn chính sách:
-    - ngành dẫn dắt chuyển đổi số
-    - ngành cần hỗ trợ hấp thụ AI
-    - ngành có rủi ro tự động hóa cần chính sách an sinh/kỹ năng
-    - độ vững của xếp hạng khi thay đổi trọng số AI Readiness
-    """
-    default_result = calculate_priority(df)
-    sens_table, rank_matrix = ai_weight_sensitivity(df)
-    growth_result, inclusive_result, comparison = compare_policy_orientations(df)
-
-    top1 = default_result.iloc[0]
-    top3 = default_result.head(3).copy()
-    khai_khoang = default_result[default_result["sector_name_vi"] == "Khai khoáng"].iloc[0]
-
-    top3_unique = sens_table["Top-3"].nunique()
-    top1_stability = (
-        sens_table["Top 1"].value_counts(normalize=True).iloc[0] * 100
-        if not sens_table.empty else np.nan
-    )
-
-    priority_gap = (
-        default_result.iloc[0]["Priority"] - default_result.iloc[2]["Priority"]
-        if len(default_result) >= 3 else np.nan
-    )
-
-    avg_top3_ai = top3["ai_readiness_0_100"].mean()
-    avg_top3_risk = top3["automation_risk_pct"].mean()
-
-    rank_switch = comparison.copy()
-    rank_switch["Mức đảo chiều chính sách"] = rank_switch["Chênh lệch thứ hạng"].abs()
-    most_sensitive = rank_switch.sort_values("Mức đảo chiều chính sách", ascending=False).head(3)
-
-    intelligence = pd.DataFrame({
-        "Lớp phân tích": [
-            "Ngành dẫn dắt",
-            "Độ vững của Top-3",
-            "Khoảng cách ưu tiên",
-            "Năng lực AI của Top-3",
-            "Rủi ro tự động hóa của Top-3",
-            "Ngành nhạy với định hướng chính sách",
-            "Cảnh báo tránh nhìn một chỉ tiêu",
-        ],
-        "Chỉ báo": [
-            top1["sector_name_vi"],
-            f"{top3_unique} cấu hình Top-3 khi thay đổi trọng số AI",
-            f"Top 1 - Top 3 = {priority_gap:.3f}",
-            f"AI Readiness bình quân Top-3 = {avg_top3_ai:.2f}",
-            f"Rủi ro TĐH bình quân Top-3 = {avg_top3_risk:.2f}%",
-            ", ".join(most_sensitive["Ngành"].tolist()),
-            f"Khai khoáng xếp hạng {int(khai_khoang['Rank'])} dù năng suất cao",
-        ],
-        "Ý nghĩa chính sách": [
-            "Có thể là ngành hạt nhân để tạo hiệu ứng lan tỏa chuyển đổi số và AI.",
-            "Nếu số cấu hình thấp, xếp hạng ổn định; nếu cao, cần tham vấn lại trọng số.",
-            "Khoảng cách nhỏ nghĩa là không nên chỉ chọn duy nhất một ngành, mà nên thiết kế danh mục ưu tiên.",
-            "Top-3 có năng lực AI cao sẽ triển khai nhanh; nếu thấp cần đầu tư nền tảng trước.",
-            "Rủi ro cao đòi hỏi chính sách đào tạo lại, bảo vệ lao động và chuyển đổi kỹ năng.",
-            "Các ngành đổi hạng mạnh khi đổi trọng số cần được thảo luận trong hội đồng chính sách.",
-            "Một ngành có một chỉ tiêu nổi bật vẫn có thể không phù hợp nếu yếu về tăng trưởng, lan tỏa hoặc AI Readiness.",
-        ]
-    })
-
-    return {
-        "default_result": default_result,
-        "top3": top3,
-        "sensitivity": sens_table,
-        "rank_matrix": rank_matrix,
-        "growth_result": growth_result,
-        "inclusive_result": inclusive_result,
-        "comparison": comparison,
-        "intelligence": intelligence,
-        "metrics": {
-            "So_nganh": int(len(df)),
-            "So_tieu_chi": 7,
-            "Top1_nganh": str(top1["sector_name_vi"]),
-            "Top1_priority": float(top1["Priority"]),
-            "Top2_nganh": str(default_result.iloc[1]["sector_name_vi"]),
-            "Top2_priority": float(default_result.iloc[1]["Priority"]),
-            "Top3_nganh": str(default_result.iloc[2]["sector_name_vi"]),
-            "Top3_priority": float(default_result.iloc[2]["Priority"]),
-            "Priority_gap_top1_top3": float(priority_gap),
-            "Top3_unique_when_AI_weight_changes": int(top3_unique),
-            "Top1_stability_pct": float(top1_stability),
-            "Avg_AI_Readiness_top3": float(avg_top3_ai),
-            "Avg_automation_risk_top3_pct": float(avg_top3_risk),
-            "Growth_orientation_top1": str(growth_result.iloc[0]["sector_name_vi"]),
-            "Inclusive_orientation_top1": str(inclusive_result.iloc[0]["sector_name_vi"]),
-            "Khai_khoang_rank": int(khai_khoang["Rank"]),
-            "Khai_khoang_productivity": float(khai_khoang["productivity_million_VND_per_worker"]),
-        }
-    }
-
-
-def show_ai_policy_analysis(df):
-    """
-    Tab AI Analyst của Bài 3.
-    Phần này bổ sung cách đọc mới: biến kết quả xếp hạng thành bản đồ hành động chính sách.
-    Sau đó gọi render_ai_agent để Gemini/offline phân tích sâu hơn.
-    """
-    st.header("🤖 AI Analyst — Tác nhân phân tích ưu tiên ngành")
-
-    if not AI_AGENT_AVAILABLE:
-        st.error(
-            "Chưa tìm thấy file `ai_agent.py`. Hãy đặt `ai_agent.py` cùng cấp với `app.py` "
-            "để kích hoạt tác nhân Gemini/offline."
-        )
-        return
-
-    intel = build_sector_policy_intelligence(df)
-    result = intel["default_result"]
-    top3 = intel["top3"]
-    intelligence = intel["intelligence"]
-    metrics = intel["metrics"]
-    comparison = intel["comparison"]
-    sens_table = intel["sensitivity"]
-
-    st.markdown("""
-    Phần này đọc kết quả Bài 3 theo cách **policy intelligence**: không dừng ở bảng xếp hạng,
-    mà chuyển chỉ số `Priorityᵢ` thành khuyến nghị về danh mục ngành ưu tiên, rủi ro trọng số,
-    năng lực hấp thụ AI và yêu cầu điều phối chính sách.
-    """)
-
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Top 1", metrics["Top1_nganh"], f"Priority = {metrics['Top1_priority']:.3f}")
-    c2.metric("Khoảng cách Top1-Top3", f"{metrics['Priority_gap_top1_top3']:.3f}")
-    c3.metric("Độ ổn định Top 1", f"{metrics['Top1_stability_pct']:.1f}%")
-    c4.metric("Số cấu hình Top-3", metrics["Top3_unique_when_AI_weight_changes"])
-
-    st.subheader("Bản đồ đọc kết quả mới: từ xếp hạng sang hành động chính sách")
-    st.dataframe(intelligence, use_container_width=True, hide_index=True)
-
-    # Ma trận hành động chính sách: Priority cao/thấp và AI readiness cao/thấp
-    action_df = result.copy()
-    priority_median = action_df["Priority"].median()
-    ai_median = action_df["ai_readiness_0_100"].median()
-
-    def classify_policy_action(row):
-        if row["Priority"] >= priority_median and row["ai_readiness_0_100"] >= ai_median:
-            return "Ưu tiên triển khai sớm"
-        if row["Priority"] >= priority_median and row["ai_readiness_0_100"] < ai_median:
-            return "Ưu tiên nhưng cần nâng năng lực AI"
-        if row["Priority"] < priority_median and row["automation_risk_pct"] >= action_df["automation_risk_pct"].median():
-            return "Theo dõi rủi ro lao động"
-        return "Duy trì, thử nghiệm có chọn lọc"
-
-    action_df["Nhóm hành động chính sách"] = action_df.apply(classify_policy_action, axis=1)
-
-    st.subheader("Ma trận hành động: Priorityᵢ × AI Readiness × rủi ro tự động hóa")
-    fig_action = px.scatter(
-        action_df,
-        x="ai_readiness_0_100",
-        y="Priority",
-        size="labor_million",
-        color="Nhóm hành động chính sách",
-        hover_name="sector_name_vi",
-        hover_data={
-            "growth_rate_2024_pct": ":.2f",
-            "spillover_coef_0_1": ":.2f",
-            "automation_risk_pct": ":.1f",
-            "labor_million": ":.2f",
-        },
-        title="Ma trận chính sách: ngành nào triển khai AI trước, ngành nào cần chuẩn bị năng lực?",
-        labels={
-            "ai_readiness_0_100": "AI Readiness",
-            "Priority": "Priorityᵢ",
-            "labor_million": "Việc làm, triệu lao động",
-        }
-    )
-    fig_action.add_vline(x=ai_median, line_dash="dash", opacity=0.55)
-    fig_action.add_hline(y=priority_median, line_dash="dash", opacity=0.55)
-    fig_action.update_layout(height=560)
-    st.plotly_chart(fig_action, use_container_width=True)
-
-    st.subheader("Top-3 mặc định và hai định hướng chính sách")
-    policy_top = pd.DataFrame({
-        "Bộ trọng số": ["Mặc định", "Định hướng tăng trưởng", "Định hướng bao trùm"],
-        "Top 1": [
-            result.iloc[0]["sector_name_vi"],
-            intel["growth_result"].iloc[0]["sector_name_vi"],
-            intel["inclusive_result"].iloc[0]["sector_name_vi"],
-        ],
-        "Top 2": [
-            result.iloc[1]["sector_name_vi"],
-            intel["growth_result"].iloc[1]["sector_name_vi"],
-            intel["inclusive_result"].iloc[1]["sector_name_vi"],
-        ],
-        "Top 3": [
-            result.iloc[2]["sector_name_vi"],
-            intel["growth_result"].iloc[2]["sector_name_vi"],
-            intel["inclusive_result"].iloc[2]["sector_name_vi"],
-        ],
-    })
-    st.dataframe(policy_top, use_container_width=True, hide_index=True)
-
-    rank_change = comparison[[
-        "Ngành",
-        "Rank - Định hướng tăng trưởng",
-        "Rank - Định hướng bao trùm",
-        "Chênh lệch thứ hạng"
-    ]].copy()
-    rank_change["Mức nhạy chính sách"] = rank_change["Chênh lệch thứ hạng"].abs()
-    rank_change = rank_change.sort_values("Mức nhạy chính sách", ascending=False)
-
-    st.subheader("Ngành nhạy nhất khi đổi mục tiêu chính sách")
-    st.dataframe(rank_change.head(5), use_container_width=True, hide_index=True)
-
-    st.subheader("Bảng kết quả gửi cho tác nhân AI")
-    ai_result_table = result[[
-        "sector_name_vi",
-        "Priority",
-        "Rank",
-        "growth_rate_2024_pct",
-        "productivity_million_VND_per_worker",
-        "spillover_coef_0_1",
-        "export_billion_USD",
-        "labor_million",
-        "ai_readiness_0_100",
-        "automation_risk_pct",
-    ]].copy()
-    ai_result_table.columns = [
-        "Ngành",
-        "Priorityᵢ",
-        "Xếp hạng",
-        "Tăng trưởng, %",
-        "Năng suất",
-        "Lan tỏa",
-        "Xuất khẩu",
-        "Việc làm",
-        "AI Readiness",
-        "Rủi ro TĐH, %",
-    ]
-    st.dataframe(ai_result_table.round(3), use_container_width=True)
-
-    render_ai_agent(
-        bai_name="Bài 3 — Chỉ số ưu tiên ngành Priorityᵢ cho chuyển đổi số và AI",
-        model_goal=(
-            "Xây dựng chỉ số tổng hợp Priorityᵢ để xếp hạng 10 ngành kinh tế Việt Nam, "
-            "dựa trên tăng trưởng, năng suất, lan tỏa, xuất khẩu, việc làm, AI Readiness "
-            "và rủi ro tự động hóa đã đảo chiều."
-        ),
-        metrics=metrics,
-        result_table=ai_result_table.round(3),
-        policy_questions=(
-            "Ba ngành nào nên ưu tiên chuyển đổi số và AI trước? "
-            "Kết quả xếp hạng có ổn định khi thay đổi trọng số AI Readiness không? "
-            "Vì sao một ngành có năng suất cao như Khai khoáng vẫn có thể không nằm trong nhóm ưu tiên? "
-            "Khi đổi giữa định hướng tăng trưởng và định hướng bao trùm, thứ hạng ngành thay đổi thế nào? "
-            "Bộ trọng số nên do chuyên gia kỹ thuật, hội đồng chính sách hay tham vấn đa bên quyết định?"
-        ),
-        key_suffix="bai3"
-    )
 
 
 # ---------------------------------------------------------
@@ -1273,6 +1018,264 @@ def show_policy_discussion(df):
         "Chuyên gia kỹ thuật xây dựng mô hình và kiểm định độ nhạy; hội đồng chính sách lựa chọn trọng số phù hợp mục tiêu phát triển; "
         "còn doanh nghiệp, địa phương và người lao động cần tham gia phản biện để bảo đảm tính chính danh. "
         "Cách làm này tốt hơn việc giao hoàn toàn cho một nhóm, vì trọng số ảnh hưởng trực tiếp đến phân bổ nguồn lực và lợi ích giữa các ngành."
+    )
+
+
+
+
+# ---------------------------------------------------------
+# 10. PHÂN TÍCH AI ANALYST VÀ POLICY INTELLIGENCE
+# ---------------------------------------------------------
+def build_sector_policy_intelligence(df):
+    """
+    Tạo lớp phân tích bổ sung cho AI Analyst.
+    Không thay đổi công thức Priority_i gốc, chỉ đọc kết quả theo góc nhìn chính sách:
+    - ngành dẫn dắt,
+    - độ vững của top-3,
+    - khoảng cách điểm,
+    - rủi ro tự động hóa,
+    - xung đột giữa định hướng tăng trưởng và bao trùm.
+    """
+    result = calculate_priority(df)
+    sens_table, rank_matrix = ai_weight_sensitivity(df)
+    growth_result, inclusive_result, comparison = compare_policy_orientations(df)
+
+    top3 = result.head(3).copy()
+    top1 = top3.iloc[0]
+    top3_names = top3["sector_name_vi"].tolist()
+
+    top3_stability_count = sens_table["Top-3"].nunique()
+    if top3_stability_count == 1:
+        stability_text = "Top-3 ổn định khi thay đổi trọng số AI Readiness từ 0,05 đến 0,40"
+    else:
+        stability_text = f"Top-3 thay đổi giữa {top3_stability_count} cấu hình trọng số AI Readiness"
+
+    priority_gap_top1_top3 = float(top3.iloc[0]["Priority"] - top3.iloc[2]["Priority"])
+    avg_top3_ai = float(top3["ai_readiness_0_100"].mean())
+    avg_top3_risk = float(top3["automation_risk_pct"].mean())
+
+    comparison_abs = comparison.copy()
+    comparison_abs["Mức đổi hạng tuyệt đối"] = comparison_abs["Chênh lệch thứ hạng"].abs()
+    most_sensitive = comparison_abs.sort_values("Mức đổi hạng tuyệt đối", ascending=False).iloc[0]
+
+    khai = result[result["sector_name_vi"] == "Khai khoáng"].iloc[0]
+
+    intelligence = pd.DataFrame({
+        "Lớp phân tích": [
+            "Ngành dẫn dắt theo Priorityᵢ",
+            "Độ vững của nhóm Top-3",
+            "Khoảng cách Top1 - Top3",
+            "AI Readiness bình quân Top-3",
+            "Rủi ro tự động hóa bình quân Top-3",
+            "Ngành nhạy nhất khi đổi định hướng chính sách",
+            "Cảnh báo tránh nhìn một chỉ tiêu",
+        ],
+        "Kết quả định lượng": [
+            f"{top1['sector_name_vi']} | Priority = {top1['Priority']:.3f}",
+            stability_text,
+            f"{priority_gap_top1_top3:.3f}",
+            f"{avg_top3_ai:.2f}/100",
+            f"{avg_top3_risk:.2f}%",
+            f"{most_sensitive['Ngành']} | đổi {most_sensitive['Mức đổi hạng tuyệt đối']:.0f} bậc",
+            f"Khai khoáng năng suất {khai['productivity_million_VND_per_worker']:.1f} nhưng Rank = {int(khai['Rank'])}",
+        ],
+        "Ý nghĩa chính sách": [
+            "Ngành này có thể được chọn làm điểm khởi động cho chương trình AI/CĐS cấp ngành.",
+            "Nếu Top-3 ổn định, kết quả đủ vững để làm cơ sở ưu tiên chính sách; nếu thay đổi nhiều, cần đối thoại lại về trọng số.",
+            "Khoảng cách càng nhỏ thì quyết định ưu tiên càng cần thận trọng, tránh tuyệt đối hóa thứ hạng.",
+            "Top-3 có nền tảng AI càng cao thì khả năng triển khai nhanh càng lớn.",
+            "Rủi ro càng cao thì chính sách AI phải đi cùng đào tạo lại lao động và an sinh chuyển đổi.",
+            "Ngành này chịu ảnh hưởng mạnh khi Nhà nước chuyển từ mục tiêu tăng trưởng sang bao trùm hoặc ngược lại.",
+            "Không nên xếp hạng chỉ bằng năng suất; phải xét đồng thời tăng trưởng, lan tỏa, việc làm, AI và rủi ro.",
+        ]
+    })
+
+    return intelligence
+
+
+def build_sector_action_matrix(df):
+    """
+    Chuyển điểm Priority_i thành ma trận hành động chính sách.
+    Đây là lớp phân tích mới, giúp dashboard không chỉ xếp hạng mà còn gợi ý cách can thiệp.
+    """
+    result = calculate_priority(df).copy()
+
+    priority_threshold = result["Priority"].median()
+    ai_threshold = result["ai_readiness_0_100"].median()
+    risk_threshold = result["automation_risk_pct"].median()
+
+    actions = []
+    for _, row in result.iterrows():
+        high_priority = row["Priority"] >= priority_threshold
+        high_ai = row["ai_readiness_0_100"] >= ai_threshold
+        high_risk = row["automation_risk_pct"] >= risk_threshold
+
+        if high_priority and high_ai and not high_risk:
+            group = "Ưu tiên triển khai sớm"
+            action = "Mở rộng sandbox AI, đầu tư nền tảng dữ liệu, hỗ trợ doanh nghiệp ứng dụng AI quy mô lớn."
+        elif high_priority and not high_ai:
+            group = "Ưu tiên nhưng cần nâng năng lực AI"
+            action = "Đầu tư hạ tầng dữ liệu, đào tạo kỹ năng số, hỗ trợ tư vấn chuyển đổi số trước khi triển khai AI sâu."
+        elif high_priority and high_risk:
+            group = "Ưu tiên có điều kiện về lao động"
+            action = "Triển khai AI kèm đào tạo lại, bảo vệ việc làm, chính sách chuyển đổi kỹ năng và an sinh."
+        elif not high_priority and high_ai:
+            group = "Thử nghiệm có chọn lọc"
+            action = "Thí điểm AI ở các phân khúc có tác động lan tỏa hoặc có khả năng xuất khẩu dịch vụ số."
+        else:
+            group = "Theo dõi và hỗ trợ nền tảng"
+            action = "Duy trì dữ liệu ngành, cải thiện năng suất và năng lực hấp thụ trước khi ưu tiên ngân sách lớn."
+
+        actions.append({
+            "Ngành": row["sector_name_vi"],
+            "Priorityᵢ": row["Priority"],
+            "Rank": int(row["Rank"]),
+            "AI Readiness": row["ai_readiness_0_100"],
+            "Rủi ro tự động hóa, %": row["automation_risk_pct"],
+            "Nhóm hành động": group,
+            "Gợi ý chính sách": action,
+        })
+
+    return pd.DataFrame(actions).sort_values(["Rank", "Priorityᵢ"], ascending=[True, False])
+
+
+def show_ai_policy_analysis(df):
+    """
+    Tab AI Analyst của Bài 3.
+    Gồm hai lớp:
+    1. Policy Intelligence tự động bằng code.
+    2. Tác nhân AI dùng chung render_ai_agent, gọi Gemini nếu đã có API key.
+    """
+    st.header("🤖 AI Analyst — Phân tích ưu tiên ngành bằng AI")
+
+    result = calculate_priority(df)
+    norm_df = normalize_sector_data(df)
+    sens_table, rank_matrix = ai_weight_sensitivity(df)
+    growth_result, inclusive_result, comparison = compare_policy_orientations(df)
+    intelligence = build_sector_policy_intelligence(df)
+    action_matrix = build_sector_action_matrix(df)
+
+    top3 = result.head(3).copy()
+    top3_names = " | ".join(top3["sector_name_vi"].tolist())
+    top1 = result.iloc[0]
+    top10 = result.iloc[-1]
+    top3_stability_count = sens_table["Top-3"].nunique()
+    avg_top3_ai = float(top3["ai_readiness_0_100"].mean())
+    avg_top3_risk = float(top3["automation_risk_pct"].mean())
+
+    comparison_abs = comparison.copy()
+    comparison_abs["Mức đổi hạng tuyệt đối"] = comparison_abs["Chênh lệch thứ hạng"].abs()
+    most_sensitive = comparison_abs.sort_values("Mức đổi hạng tuyệt đối", ascending=False).iloc[0]
+
+    st.markdown(
+        """
+        Phần này bổ sung lớp **policy intelligence** cho Bài 3. Thay vì chỉ xem bảng xếp hạng,
+        hệ thống đọc kết quả theo hướng ra quyết định: ngành nào dẫn dắt, kết quả có vững không,
+        ngành nào nhạy với trọng số chính sách và mỗi nhóm ngành nên được can thiệp theo cách nào.
+        """
+    )
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Top 1 theo Priorityᵢ", top1["sector_name_vi"], f"{top1['Priority']:.3f}")
+    c2.metric("Top-3", top3_names)
+    c3.metric("Độ ổn định Top-3", f"{top3_stability_count} cấu hình")
+
+    c4, c5, c6 = st.columns(3)
+    c4.metric("AI Readiness TB Top-3", f"{avg_top3_ai:.2f}/100")
+    c5.metric("Rủi ro TĐH TB Top-3", f"{avg_top3_risk:.2f}%")
+    c6.metric("Ngành thấp nhất", top10["sector_name_vi"], f"Rank {int(top10['Rank'])}")
+
+    st.subheader("3.A — Bảng policy intelligence")
+    st.dataframe(intelligence, use_container_width=True, hide_index=True)
+
+    st.subheader("3.B — Ma trận hành động Priorityᵢ × AI Readiness × rủi ro tự động hóa")
+    st.dataframe(action_matrix.round(3), use_container_width=True, hide_index=True)
+
+    fig_action = px.scatter(
+        action_matrix,
+        x="AI Readiness",
+        y="Priorityᵢ",
+        size="Rủi ro tự động hóa, %",
+        color="Nhóm hành động",
+        hover_name="Ngành",
+        title="Ma trận hành động chính sách: Priorityᵢ × AI Readiness × Rủi ro tự động hóa",
+        labels={
+            "AI Readiness": "AI Readiness, 0-100",
+            "Priorityᵢ": "Điểm ưu tiên ngành",
+        }
+    )
+    fig_action.update_layout(height=560)
+    st.plotly_chart(fig_action, use_container_width=True)
+
+    st.subheader("3.C — Tác nhân AI phân tích kết quả")
+
+    if not AI_AGENT_AVAILABLE:
+        st.warning(
+            "Chưa tìm thấy file ai_agent.py hoặc chưa import được render_ai_agent. "
+            "Hãy đặt ai_agent.py cùng cấp với app.py để kích hoạt tác nhân AI."
+        )
+        return
+
+    ai_result_table = result[[
+        "sector_name_vi",
+        "Priority",
+        "Rank",
+        "growth_rate_2024_pct",
+        "productivity_million_VND_per_worker",
+        "spillover_coef_0_1",
+        "export_billion_USD",
+        "labor_million",
+        "ai_readiness_0_100",
+        "automation_risk_pct",
+    ]].head(10).copy()
+
+    ai_result_table.columns = [
+        "Ngành",
+        "Priorityᵢ",
+        "Xếp hạng",
+        "Tăng trưởng, %",
+        "Năng suất",
+        "Lan tỏa",
+        "Xuất khẩu",
+        "Việc làm",
+        "AI Readiness",
+        "Rủi ro tự động hóa, %",
+    ]
+
+    metrics = {
+        "So_nganh_phan_tich": int(len(result)),
+        "So_tieu_chi": 7,
+        "Top1_nganh": str(top1["sector_name_vi"]),
+        "Top1_Priority": float(top1["Priority"]),
+        "Top2_nganh": str(result.iloc[1]["sector_name_vi"]),
+        "Top2_Priority": float(result.iloc[1]["Priority"]),
+        "Top3_nganh": str(result.iloc[2]["sector_name_vi"]),
+        "Top3_Priority": float(result.iloc[2]["Priority"]),
+        "Top3_stability_count_AI_weight_005_040": int(top3_stability_count),
+        "Avg_top3_AI_readiness": float(avg_top3_ai),
+        "Avg_top3_automation_risk_pct": float(avg_top3_risk),
+        "Most_sensitive_sector_between_growth_and_inclusive": str(most_sensitive["Ngành"]),
+        "Most_sensitive_rank_change_abs": float(most_sensitive["Mức đổi hạng tuyệt đối"]),
+    }
+
+    policy_questions = (
+        "Ba ngành nào nên ưu tiên chuyển đổi số và ứng dụng AI trước, dựa trên Priorityᵢ? "
+        "Kết quả xếp hạng có ổn định khi thay đổi trọng số AI Readiness không? "
+        "Vì sao không nên chỉ nhìn một chỉ tiêu như năng suất để quyết định ngành ưu tiên? "
+        "Sự khác biệt giữa định hướng tăng trưởng và định hướng bao trùm hàm ý gì cho phân bổ nguồn lực? "
+        "Cần thiết kế chính sách thế nào để vừa thúc đẩy AI, vừa giảm rủi ro tự động hóa đối với lao động?"
+    )
+
+    render_ai_agent(
+        bai_name="Bài 3 — Xếp hạng ưu tiên 10 ngành chuyển đổi số và AI bằng chỉ số Priorityᵢ",
+        model_goal=(
+            "Chuẩn hóa 7 tiêu chí ngành, tính điểm Priorityᵢ, xếp hạng 10 ngành kinh tế Việt Nam, "
+            "kiểm tra độ nhạy theo trọng số AI Readiness và so sánh hai định hướng chính sách tăng trưởng/bao trùm."
+        ),
+        metrics=metrics,
+        result_table=ai_result_table.round(3),
+        policy_questions=policy_questions,
+        key_suffix="bai3",
     )
 
 
