@@ -10,6 +10,13 @@ try:
 except ImportError:
     PULP_AVAILABLE = False
 
+try:
+    from ai_agent import render_ai_agent
+    AI_AGENT_AVAILABLE = True
+except Exception:
+    render_ai_agent = None
+    AI_AGENT_AVAILABLE = False
+
 
 # =========================================================
 # BÀI 5 — QUY HOẠCH NGUYÊN HỖN HỢP MIP
@@ -1092,6 +1099,334 @@ def show_policy_discussion():
 
 
 # ---------------------------------------------------------
+# 8. PHÂN TÍCH AI & POLICY INTELLIGENCE CHO BÀI 5
+# ---------------------------------------------------------
+def build_project_policy_intelligence(base, budget_100, risk_case, no_p14, synergy_case):
+    """
+    Tạo bảng tóm tắt các tín hiệu chính sách quan trọng từ nghiệm MIP.
+    Hàm này không thay đổi nghiệm tối ưu, chỉ đọc kết quả để diễn giải sâu hơn.
+    """
+    s = base["summary"]
+    selected = base["selected_df"].copy()
+    selected_codes = set(selected["code"].tolist())
+
+    budget_slack = 80000 - s["total_cost"]
+    early_slack = 40000 - s["total_early_cost"]
+
+    budget_gain = np.nan
+    budget_added_projects = "Không có / không tối ưu"
+    if budget_100 is not None and budget_100["status"] == "Optimal":
+        budget_gain = budget_100["summary"]["objective"] - s["objective"]
+        added = sorted(list(set(budget_100["selected_df"]["code"]) - selected_codes))
+        budget_added_projects = ", ".join(added) if added else "Không thêm dự án mới"
+
+    risk_objective = np.nan
+    risk_changed = "Không có / không tối ưu"
+    if risk_case is not None and risk_case["status"] == "Optimal":
+        risk_objective = risk_case["summary"]["objective"]
+        added_risk = sorted(list(set(risk_case["selected_df"]["code"]) - selected_codes))
+        removed_risk = sorted(list(selected_codes - set(risk_case["selected_df"]["code"])))
+        risk_changed = f"Thêm: {', '.join(added_risk) if added_risk else 'không'}; loại: {', '.join(removed_risk) if removed_risk else 'không'}"
+
+    no_p14_delta = np.nan
+    if no_p14 is not None and no_p14["status"] == "Optimal":
+        no_p14_delta = no_p14["summary"]["objective"] - s["objective"]
+
+    synergy_delta = np.nan
+    synergy_active = "Không có / không tối ưu"
+    if synergy_case is not None and synergy_case["status"] == "Optimal":
+        synergy_delta = synergy_case["summary"]["objective"] - s["objective"]
+        synergy_active = "Có" if synergy_case["summary"]["synergy_active"] == 1 else "Không"
+
+    strategic_fields = ["AI", "Bán dẫn", "Hạ tầng", "Dữ liệu", "An ninh", "Nhân lực"]
+    strategic_count = int(selected["field"].isin(strategic_fields).sum())
+    avg_completion_prob = selected["completion_probability"].mean()
+    high_risk_count = int((selected["completion_probability"] < 0.70).sum())
+
+    rows = [
+        {
+            "Góc phân tích": "Hiệu quả danh mục",
+            "Chỉ báo": "NPV/chi phí",
+            "Kết quả": f"{s['npv_per_cost']:.2f}",
+            "Hàm ý chính sách": "Danh mục được chọn không chỉ tối đa hóa NPV tuyệt đối mà còn duy trì hiệu quả vốn đầu tư.",
+        },
+        {
+            "Góc phân tích": "Áp lực ngân sách",
+            "Chỉ báo": "Dư địa ngân sách 5 năm",
+            "Kết quả": f"{budget_slack:,.0f} tỷ VND",
+            "Hàm ý chính sách": "Nếu dư địa còn nhỏ, ưu tiên tiếp theo phải dựa trên hiệu quả biên thay vì mở rộng dàn trải.",
+        },
+        {
+            "Góc phân tích": "Áp lực giải ngân sớm",
+            "Chỉ báo": "Dư địa ngân sách năm 1-2",
+            "Kết quả": f"{early_slack:,.0f} tỷ VND",
+            "Hàm ý chính sách": "Ràng buộc giải ngân sớm giúp tránh chọn quá nhiều dự án lớn cùng khởi động trong giai đoạn đầu.",
+        },
+        {
+            "Góc phân tích": "Năng lực thực thi",
+            "Chỉ báo": "Xác suất hoàn thành bình quân của danh mục",
+            "Kết quả": f"{avg_completion_prob:.2f}",
+            "Hàm ý chính sách": "Danh mục cần được đánh giá không chỉ bằng NPV danh nghĩa mà còn bằng khả năng hoàn thành đúng tiến độ.",
+        },
+        {
+            "Góc phân tích": "Rủi ro triển khai",
+            "Chỉ báo": "Số dự án xác suất hoàn thành < 0,70",
+            "Kết quả": f"{high_risk_count} dự án",
+            "Hàm ý chính sách": "Các dự án rủi ro cao cần cơ chế giám sát riêng, mốc nghiệm thu rõ và quản trị nhà thầu chặt hơn.",
+        },
+        {
+            "Góc phân tích": "Cấu trúc chiến lược",
+            "Chỉ báo": "Số dự án thuộc nhóm hạ tầng, AI, bán dẫn, dữ liệu, an ninh, nhân lực",
+            "Kết quả": f"{strategic_count}/{s['number_selected']} dự án",
+            "Hàm ý chính sách": "Danh mục tốt phải tạo nền tảng hệ sinh thái, không chỉ chọn các dự án có NPV riêng lẻ cao.",
+        },
+        {
+            "Góc phân tích": "Giá trị biên của ngân sách",
+            "Chỉ báo": "Tăng Z* khi nới ngân sách lên 100.000 tỷ",
+            "Kết quả": f"{budget_gain:,.0f} tỷ VND" if pd.notna(budget_gain) else "Không xác định",
+            "Hàm ý chính sách": f"Dự án có thể thêm: {budget_added_projects}. Đây là tín hiệu về ưu tiên giai đoạn 2 nếu được tăng vốn.",
+        },
+        {
+            "Góc phân tích": "Ràng buộc an ninh mạng",
+            "Chỉ báo": "Chi phí cơ hội của yêu cầu bắt buộc P14",
+            "Kết quả": f"{no_p14_delta:,.0f} tỷ VND" if pd.notna(no_p14_delta) else "Không xác định",
+            "Hàm ý chính sách": "P14 nên được xem là ràng buộc an toàn hệ thống, không chỉ là dự án có NPV tài chính.",
+        },
+        {
+            "Góc phân tích": "Cộng hưởng công nghệ",
+            "Chỉ báo": "Tác động khi thêm bonus P8-P13",
+            "Kết quả": f"ΔZ = {synergy_delta:,.0f}; cùng chọn P8-P13: {synergy_active}" if pd.notna(synergy_delta) else "Không xác định",
+            "Hàm ý chính sách": "AI quốc gia và bán dẫn nên được xem như cụm dự án bổ trợ, không phải hai quyết định hoàn toàn độc lập.",
+        },
+        {
+            "Góc phân tích": "Điều chỉnh rủi ro",
+            "Chỉ báo": "Danh mục khi tối ưu lợi ích kỳ vọng",
+            "Kết quả": risk_changed,
+            "Hàm ý chính sách": "Nếu xét rủi ro tiến độ, danh mục tối ưu có thể đổi; đây là lớp kiểm định thực thi quan trọng.",
+        },
+    ]
+
+    return pd.DataFrame(rows)
+
+
+def build_project_action_matrix(base):
+    """
+    Chuyển kết quả chọn/không chọn dự án thành ma trận hành động chính sách.
+    """
+    df = base["full_df"].copy()
+
+    selected_codes = set(base["selected_df"]["code"].tolist())
+    df["Trạng thái"] = df["code"].apply(lambda x: "Được chọn" if x in selected_codes else "Không chọn")
+
+    def action(row):
+        if row["selected"] == 1 and row["completion_probability"] < 0.70:
+            return "Chọn nhưng cần quản trị rủi ro cao"
+        if row["selected"] == 1 and row["field"] in ["AI", "Bán dẫn", "Hạ tầng"] and row["cost_total"] >= 10000:
+            return "Mũi nhọn chiến lược, giám sát giải ngân"
+        if row["selected"] == 1 and row["field"] in ["An ninh", "Dữ liệu", "Chính phủ số", "Nhân lực"]:
+            return "Nền tảng hệ thống cần triển khai sớm"
+        if row["selected"] == 1:
+            return "Triển khai theo danh mục tối ưu"
+        if row["benefit_cost_ratio"] >= 2.30 and row["cost_total"] <= 5000:
+            return "Dự án dự phòng/giai đoạn 2 vì hiệu quả vốn cao"
+        if row["field"] in ["Dữ liệu", "An ninh", "Nhân lực"]:
+            return "Không chọn nhưng cần theo dõi vì có vai trò nền tảng"
+        return "Chưa ưu tiên trong danh mục hiện tại"
+
+    df["Khuyến nghị hành động"] = df.apply(action, axis=1)
+    df["Áp lực ngân sách sớm, %"] = df["cost_year_1_2"] / df["cost_total"] * 100
+
+    return df[[
+        "code",
+        "project_name",
+        "field",
+        "Trạng thái",
+        "cost_total",
+        "benefit_npv",
+        "benefit_cost_ratio",
+        "completion_probability",
+        "Áp lực ngân sách sớm, %",
+        "Khuyến nghị hành động",
+    ]]
+
+
+def show_ai_policy_analysis():
+    st.header("🤖 AI Analyst — Phân tích danh mục MIP Bài 5")
+
+    if not AI_AGENT_AVAILABLE:
+        st.error(
+            "Chưa tìm thấy file `ai_agent.py`. Hãy đặt `ai_agent.py` cùng cấp với `app.py` "
+            "để bật Gemini/offline AI Analyst."
+        )
+        return
+
+    if not PULP_AVAILABLE:
+        st.error("Cần cài PuLP để tạo nghiệm MIP cho AI Analyst. Hãy thêm `pulp` vào requirements.txt.")
+        return
+
+    base = solve_project_mip(
+        total_budget=80000,
+        early_budget=40000,
+        min_projects=7,
+        max_projects=11,
+        force_p14=True,
+        keep_data_center_exclusion=True,
+        risk_adjusted=False,
+    )
+
+    if base is None or base["status"] != "Optimal":
+        st.error("Mô hình gốc không tối ưu nên chưa thể tạo AI Analyst cho Bài 5.")
+        return
+
+    budget_100 = solve_project_mip(
+        total_budget=100000,
+        early_budget=40000,
+        min_projects=7,
+        max_projects=11,
+        force_p14=True,
+        keep_data_center_exclusion=True,
+        risk_adjusted=False,
+    )
+
+    risk_case = solve_project_mip(
+        total_budget=80000,
+        early_budget=40000,
+        min_projects=7,
+        max_projects=11,
+        force_p14=True,
+        keep_data_center_exclusion=True,
+        risk_adjusted=True,
+    )
+
+    no_p14 = solve_project_mip(
+        total_budget=80000,
+        early_budget=40000,
+        min_projects=7,
+        max_projects=11,
+        force_p14=False,
+        keep_data_center_exclusion=True,
+        risk_adjusted=False,
+    )
+
+    synergy_case = solve_project_mip(
+        total_budget=80000,
+        early_budget=40000,
+        min_projects=7,
+        max_projects=11,
+        force_p14=True,
+        keep_data_center_exclusion=True,
+        risk_adjusted=False,
+        synergy_bonus=5000,
+    )
+
+    intelligence = build_project_policy_intelligence(base, budget_100, risk_case, no_p14, synergy_case)
+    action_matrix = build_project_action_matrix(base)
+
+    s = base["summary"]
+
+    st.subheader("1. Tóm tắt nghiệm tối ưu dùng cho AI")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Z* NPV", f"{s['objective']:,.0f}", "tỷ VND")
+    c2.metric("Tổng chi phí", f"{s['total_cost']:,.0f}", "tỷ VND")
+    c3.metric("Số dự án chọn", f"{s['number_selected']}")
+    c4.metric("NPV/Chi phí", f"{s['npv_per_cost']:.2f}")
+
+    st.info(
+        f"Danh mục tối ưu gồm: **{s['selected_codes']}**. "
+        "AI Analyst sẽ đọc danh mục này cùng các kịch bản ngân sách, rủi ro, P14 và cộng hưởng P8-P13."
+    )
+
+    st.subheader("2. Policy intelligence — lớp phân tích mới")
+    st.dataframe(intelligence, use_container_width=True)
+
+    st.subheader("3. Ma trận hành động dự án")
+    st.dataframe(action_matrix.round(3), use_container_width=True)
+
+    selected_action = action_matrix[action_matrix["Trạng thái"] == "Được chọn"].copy()
+    fig_action = px.scatter(
+        action_matrix,
+        x="cost_total",
+        y="benefit_npv",
+        size="benefit_cost_ratio",
+        color="Trạng thái",
+        hover_name="code",
+        hover_data=["project_name", "field", "Khuyến nghị hành động"],
+        title="AI policy map — chi phí, lợi ích và trạng thái lựa chọn dự án",
+    )
+    fig_action.update_layout(
+        xaxis_title="Chi phí 5 năm, tỷ VND",
+        yaxis_title="NPV lợi ích, tỷ VND",
+        height=520,
+    )
+    st.plotly_chart(fig_action, use_container_width=True)
+
+    selected_table = selected_action[[
+        "code",
+        "project_name",
+        "field",
+        "cost_total",
+        "benefit_npv",
+        "benefit_cost_ratio",
+        "completion_probability",
+        "Khuyến nghị hành động",
+    ]].copy()
+
+    metrics = {
+        "Tong_ngan_sach_5_nam": 80000.0,
+        "Ngan_sach_nam_1_2": 40000.0,
+        "Gia_tri_muc_tieu_NPV": float(s["objective"]),
+        "Tong_chi_phi_duoc_chon": float(s["total_cost"]),
+        "Chi_phi_nam_1_2_duoc_chon": float(s["total_early_cost"]),
+        "So_du_an_duoc_chon": int(s["number_selected"]),
+        "NPV_tren_chi_phi": float(s["npv_per_cost"]),
+        "Du_dia_ngan_sach_5_nam": float(80000 - s["total_cost"]),
+        "Du_dia_ngan_sach_nam_1_2": float(40000 - s["total_early_cost"]),
+        "Danh_muc_duoc_chon": s["selected_codes"],
+        "P14_an_ninh_mang_duoc_chon": int("P14" in set(base["selected_df"]["code"])),
+        "P15_du_lieu_mo_duoc_chon": int("P15" in set(base["selected_df"]["code"])),
+        "So_du_an_rui_ro_cao_prob_duoi_0_70": int((base["selected_df"]["completion_probability"] < 0.70).sum()),
+    }
+
+    if budget_100 is not None and budget_100["status"] == "Optimal":
+        metrics["Z_khi_noi_ngan_sach_100000"] = float(budget_100["summary"]["objective"])
+        metrics["Gia_tri_bien_cua_tang_ngan_sach"] = float(budget_100["summary"]["objective"] - s["objective"])
+
+    if risk_case is not None and risk_case["status"] == "Optimal":
+        metrics["Gia_tri_muc_tieu_da_dieu_chinh_rui_ro"] = float(risk_case["summary"]["objective"])
+        metrics["Danh_muc_rui_ro"] = risk_case["summary"]["selected_codes"]
+
+    if no_p14 is not None and no_p14["status"] == "Optimal":
+        metrics["Chi_phi_co_hoi_bat_buoc_P14"] = float(no_p14["summary"]["objective"] - s["objective"])
+
+    if synergy_case is not None and synergy_case["status"] == "Optimal":
+        metrics["Z_khi_them_bonus_cong_huong_P8_P13"] = float(synergy_case["summary"]["objective"])
+        metrics["P8_P13_cung_duoc_chon_khi_co_bonus"] = int(synergy_case["summary"]["synergy_active"])
+
+    policy_questions = (
+        "Danh mục dự án được chọn có cân bằng giữa hạ tầng số, AI, dữ liệu, nhân lực và an ninh mạng không? "
+        "Ràng buộc ngân sách tổng và ngân sách năm 1-2 đang ảnh hưởng thế nào đến quyết định chọn dự án? "
+        "Có nên xem P14 an ninh mạng là ràng buộc bắt buộc dù có thể làm giảm Z* không? "
+        "P15 dữ liệu mở có nên được ưu tiên bằng ràng buộc riêng nếu mô hình không chọn? "
+        "Khi xét rủi ro tiến độ, danh mục có thay đổi không và điều đó gợi ý gì về năng lực thực thi? "
+        "Hiệu ứng cộng hưởng giữa P8 AI quốc gia và P13 bán dẫn nên được đưa vào chính sách như thế nào?"
+    )
+
+    render_ai_agent(
+        bai_name="Bài 5 — MIP lựa chọn danh mục dự án chuyển đổi số quốc gia",
+        model_goal=(
+            "Sử dụng quy hoạch nguyên hỗn hợp để chọn tập dự án chuyển đổi số tối ưu, "
+            "tối đa hóa NPV lợi ích trong điều kiện ngân sách 5 năm, ngân sách năm 1-2, "
+            "ràng buộc tiên quyết, an ninh mạng bắt buộc, giới hạn số lượng dự án, rủi ro tiến độ "
+            "và hiệu ứng cộng hưởng giữa AI và bán dẫn."
+        ),
+        metrics=metrics,
+        result_table=selected_table.round(3),
+        policy_questions=policy_questions,
+        key_suffix="bai5",
+    )
+
+
+# ---------------------------------------------------------
 # 8. HÀM RENDER CHÍNH
 # ---------------------------------------------------------
 def render():
@@ -1108,6 +1443,7 @@ def render():
         "5.3 Mô hình toán học",
         "5.4 Giải lập trình",
         "5.5 Chính sách",
+        "🤖 AI Analyst",
     ])
 
     with tabs[0]:
@@ -1124,3 +1460,6 @@ def render():
 
     with tabs[4]:
         show_policy_discussion()
+
+    with tabs[5]:
+        show_ai_policy_analysis()
