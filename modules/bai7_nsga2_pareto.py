@@ -1486,4 +1486,3 @@ def render():
 
     with tabs[5]:
         show_ai_policy_analysis()
-
