@@ -118,18 +118,18 @@ def gemini_policy_analysis(bai_name, model_goal, metrics, result_table, policy_q
     """
     Gọi Gemini để phân tích kết quả.
     Nếu lỗi thì trả về None để app chuyển sang offline.
+    Bản này dùng SDK mới: google-genai.
     """
     api_key = _get_gemini_key()
     if not api_key:
         return None
 
     try:
-        import google.generativeai as genai
+        from google import genai
 
-        genai.configure(api_key=api_key)
+        model_name = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
 
-        model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
-        model = genai.GenerativeModel(model_name)
+        client = genai.Client(api_key=api_key)
 
         metrics_clean = _safe_metrics(metrics)
         table_preview = _safe_table_preview(result_table)
@@ -168,16 +168,19 @@ Yêu cầu đầu ra:
 Viết khoảng 500-800 từ.
 """
 
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model=model_name,
+            contents=prompt
+        )
 
-        if response and hasattr(response, "text"):
+        if response and hasattr(response, "text") and response.text:
             return response.text
 
         return None
 
     except Exception as e:
+        st.error(f"Lỗi khi gọi Gemini: {e}")
         return None
-
 
 def render_ai_agent(
     bai_name,
