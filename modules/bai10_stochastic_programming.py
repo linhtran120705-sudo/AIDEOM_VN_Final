@@ -16,6 +16,13 @@ try:
 except Exception:
     PULP_AVAILABLE = False
 
+try:
+    from ai_agent import render_ai_agent
+    AI_AGENT_AVAILABLE = True
+except Exception:
+    render_ai_agent = None
+    AI_AGENT_AVAILABLE = False
+
 
 # =========================================================
 # BÀI 10 — QUY HOẠCH NGẪU NHIÊN HAI GIAI ĐOẠN
@@ -1836,6 +1843,346 @@ def show_policy_discussion():
     )
 
 
+
+# ---------------------------------------------------------
+# 4. PHẦN AI ANALYST — PHÂN TÍCH CHÍNH SÁCH NÂNG CAO
+# ---------------------------------------------------------
+def _weighted_recourse_budget(y_obj):
+    """
+    Tính ngân sách điều chỉnh kỳ vọng theo hạng mục từ nghiệm stochastic.
+    Hỗ trợ cấu trúc y dạng {scenario: {item: value}}.
+    """
+    items = get_items()
+    scen = get_scenario_data()
+    probs = dict(zip(scen["scenario"], scen["probability"]))
+
+    out = {j: 0.0 for j in items}
+    if not isinstance(y_obj, dict):
+        return out
+
+    for s, ydict in y_obj.items():
+        if isinstance(ydict, dict):
+            for j in items:
+                out[j] += float(probs.get(s, 0.0)) * float(ydict.get(j, 0.0))
+    return out
+
+
+def _scenario_recourse_table(solution, solution_name="Stochastic Program"):
+    """Chuẩn hóa bảng recourse theo kịch bản để hiển thị trong AI Analyst."""
+    items = get_items()
+    item_names = get_item_names()
+    scen = get_scenario_data()
+    probs = dict(zip(scen["scenario"], scen["probability"]))
+    scen_names = dict(zip(scen["scenario"], scen["scenario_name"]))
+
+    y_obj = solution.get("y", {}) if isinstance(solution, dict) else {}
+    rows = []
+    if isinstance(y_obj, dict):
+        for s, ydict in y_obj.items():
+            if not isinstance(ydict, dict):
+                continue
+            for j in items:
+                rows.append({
+                    "solution": solution_name,
+                    "scenario": s,
+                    "scenario_name": scen_names.get(s, s),
+                    "probability": probs.get(s, 0.0),
+                    "item": j,
+                    "item_name": item_names[j],
+                    "recourse_budget": float(ydict.get(j, 0.0)),
+                    "weighted_recourse_budget": float(probs.get(s, 0.0)) * float(ydict.get(j, 0.0)),
+                })
+    return pd.DataFrame(rows)
+
+
+def build_bai10_policy_intelligence(metrics_pack):
+    """Tạo bảng policy intelligence cho Bài 10 từ kết quả SP, EV, EEV, WS và Robust Regret."""
+    sp = metrics_pack.get("SP", {})
+    ev = metrics_pack.get("EV", {})
+    eev = metrics_pack.get("EEV", {})
+    robust = metrics_pack.get("ROBUST", {})
+    macro = expected_macro_indicators()
+
+    sp_obj = float(sp.get("objective", np.nan))
+    ev_obj = float(ev.get("objective", np.nan))
+    eev_obj = float(eev.get("objective", np.nan))
+    ws_expected = float(metrics_pack.get("WS_expected", np.nan))
+    vss = float(metrics_pack.get("VSS", np.nan))
+    evpi = float(metrics_pack.get("EVPI", np.nan))
+    robust_regret = float(robust.get("max_regret", robust.get("objective", np.nan)))
+
+    x_sp = sp.get("x", {}) if isinstance(sp, dict) else {}
+    total_x = sum(float(v) for v in x_sp.values()) if x_sp else 0.0
+    h_share = float(x_sp.get("H", 0.0)) / total_x * 100 if total_x > 0 else 0.0
+    ai_share = float(x_sp.get("AI", 0.0)) / total_x * 100 if total_x > 0 else 0.0
+    dai_share = (float(x_sp.get("D", 0.0)) + float(x_sp.get("AI", 0.0))) / total_x * 100 if total_x > 0 else 0.0
+
+    if evpi > max(1e-9, 0.05 * abs(sp_obj)):
+        uncertainty_message = "Giá trị thông tin cao: nên đầu tư mạnh vào hệ thống dự báo, dữ liệu và cảnh báo sớm."
+    else:
+        uncertainty_message = "Giá trị thông tin vừa/thấp: nghiệm stochastic đã hấp thụ tương đối tốt bất định."
+
+    if vss > max(1e-9, 0.02 * abs(sp_obj)):
+        vss_message = "Stochastic programming tạo lợi ích rõ so với quyết định theo kỳ vọng đơn giản."
+    else:
+        vss_message = "Lợi ích của stochastic programming không quá lớn trong cấu hình tham số hiện tại."
+
+    return pd.DataFrame([
+        {
+            "Nhóm chỉ báo": "Kết quả tối ưu",
+            "Chỉ báo": "Expected value của nghiệm stochastic SP",
+            "Giá trị": sp_obj,
+            "Hàm ý AI Analyst": "Đây là phương án chính để ra quyết định khi chưa biết kịch bản tương lai.",
+        },
+        {
+            "Nhóm chỉ báo": "Giá trị của bất định",
+            "Chỉ báo": "VSS = SP - EEV",
+            "Giá trị": vss,
+            "Hàm ý AI Analyst": vss_message,
+        },
+        {
+            "Nhóm chỉ báo": "Giá trị thông tin",
+            "Chỉ báo": "EVPI = WS_expected - SP",
+            "Giá trị": evpi,
+            "Hàm ý AI Analyst": uncertainty_message,
+        },
+        {
+            "Nhóm chỉ báo": "Robustness",
+            "Chỉ báo": "Maximum regret của nghiệm robust",
+            "Giá trị": robust_regret,
+            "Hàm ý AI Analyst": "Dùng để kiểm tra phương án ít hối tiếc nhất nếu Chính phủ ưu tiên an toàn chính sách hơn lợi ích kỳ vọng.",
+        },
+        {
+            "Nhóm chỉ báo": "Cơ cấu giai đoạn 1",
+            "Chỉ báo": "Tỷ trọng H trong quyết định here-and-now",
+            "Giá trị": h_share,
+            "Hàm ý AI Analyst": "H càng cao thì năng lực thích ứng, hấp thụ AI và chống chịu cú sốc càng tốt.",
+        },
+        {
+            "Nhóm chỉ báo": "Cơ cấu giai đoạn 1",
+            "Chỉ báo": "Tỷ trọng D+AI trong quyết định here-and-now",
+            "Giá trị": dai_share,
+            "Hàm ý AI Analyst": "D+AI phản ánh mức độ đặt cược sớm vào tăng trưởng số và năng suất công nghệ.",
+        },
+        {
+            "Nhóm chỉ báo": "Bất định vĩ mô",
+            "Chỉ báo": "Xác suất kịch bản xấu s3+s4",
+            "Giá trị": macro["prob_bad"] * 100,
+            "Hàm ý AI Analyst": "Xác suất xấu càng cao thì chính sách càng cần phần ngân sách dự phòng và đầu tư nhân lực số.",
+        },
+        {
+            "Nhóm chỉ báo": "Bất định vĩ mô",
+            "Chỉ báo": "FDI kỳ vọng",
+            "Giá trị": macro["fdi_expected"],
+            "Hàm ý AI Analyst": "FDI kỳ vọng là tín hiệu về khả năng hấp thụ đầu tư số, đặc biệt với D và AI.",
+        },
+    ])
+
+
+def build_bai10_action_matrix(metrics_pack):
+    """Tạo ma trận hành động theo hạng mục I, D, AI, H."""
+    items = get_items()
+    names = get_item_names()
+    sp = metrics_pack.get("SP", {})
+    x = sp.get("x", {}) if isinstance(sp, dict) else {}
+    weighted_y = _weighted_recourse_budget(sp.get("y", {})) if isinstance(sp, dict) else {j: 0.0 for j in items}
+    beta_ev = expected_beta_s()
+
+    role_map = {
+        "I": "Ổn định hạ tầng nền, giảm nút thắt triển khai số.",
+        "D": "Chuẩn hóa dữ liệu và chuyển đổi số doanh nghiệp/dịch vụ công.",
+        "AI": "Tạo upside tăng trưởng khi kịch bản thuận lợi, nhưng nhạy với khủng hoảng.",
+        "H": "Tài sản bảo hiểm: tăng năng lực hấp thụ, chuyển đổi kỹ năng và chống chịu cú sốc.",
+    }
+
+    rows = []
+    for j in items:
+        first_budget = float(x.get(j, 0.0))
+        recourse_budget = float(weighted_y.get(j, 0.0))
+        total_expected = first_budget + recourse_budget
+
+        if j == "H" and first_budget >= max(x.values()) if x else False:
+            action = "Giữ vai trò neo an toàn chính sách"
+        elif recourse_budget > first_budget * 0.35:
+            action = "Để linh hoạt điều chỉnh theo kịch bản"
+        elif first_budget > 0:
+            action = "Cam kết sớm trong giai đoạn 1"
+        else:
+            action = "Chỉ bổ sung khi có tín hiệu kịch bản"
+
+        rows.append({
+            "Hạng mục": j,
+            "Tên hạng mục": names[j],
+            "β kỳ vọng": beta_ev[j],
+            "Ngân sách giai đoạn 1": first_budget,
+            "Recourse kỳ vọng": recourse_budget,
+            "Tổng ngân sách kỳ vọng": total_expected,
+            "Vai trò chính sách": role_map[j],
+            "Khuyến nghị AI Analyst": action,
+        })
+
+    return pd.DataFrame(rows).sort_values("Tổng ngân sách kỳ vọng", ascending=False).reset_index(drop=True)
+
+
+def show_ai_policy_analysis():
+    st.header("🤖 AI Analyst — Phân tích chính sách Bài 10")
+
+    st.markdown("""
+    Phần này bổ sung một lớp **AI Analyst** cho mô hình quy hoạch ngẫu nhiên hai giai đoạn.
+    AI đọc kết quả theo 4 trục: **quyết định here-and-now**, **recourse theo kịch bản**,
+    **giá trị của thông tin** và **mức độ chống chịu chính sách**.
+    """)
+
+    if not AI_AGENT_AVAILABLE:
+        st.warning(
+            "Chưa import được `ai_agent.py`. Tab AI vẫn hiển thị, nhưng phần gọi Gemini chưa chạy. "
+            "Hãy đặt `ai_agent.py` cùng cấp với `app.py` và kiểm tra GEMINI_API_KEY trong Secrets."
+        )
+
+    if not PULP_AVAILABLE and not PYOMO_AVAILABLE:
+        st.error("Cần cài `pulp` hoặc `pyomo` để tạo kết quả cho AI Analyst Bài 10.")
+        return
+
+    with st.spinner("Đang chạy mô hình Bài 10 cho AI Analyst..."):
+        try:
+            metrics_pack = solve_all_metrics(
+                first_budget=65000,
+                recourse_budget=15000,
+                item_cap_share=0.55,
+                min_H_first=0,
+                min_DAI_first=0,
+                ai_link=0.5,
+            )
+        except Exception as exc:
+            st.error(f"Không tạo được dữ liệu AI Analyst cho Bài 10: {exc}")
+            return
+
+    sp = metrics_pack.get("SP", {})
+    ev = metrics_pack.get("EV", {})
+    eev = metrics_pack.get("EEV", {})
+    robust = metrics_pack.get("ROBUST", {})
+
+    if not sp or sp.get("status") != "Optimal":
+        st.error("Mô hình stochastic program chưa tối ưu nên chưa thể gọi AI Analyst.")
+        return
+
+    policy_df = build_bai10_policy_intelligence(metrics_pack)
+    action_df = build_bai10_action_matrix(metrics_pack)
+    recourse_df = _scenario_recourse_table(sp, "SP")
+
+    st.subheader("Bảng 10.AI.1 — Policy intelligence của mô hình two-stage stochastic programming")
+    st.dataframe(policy_df.round(3), use_container_width=True)
+
+    st.subheader("Bảng 10.AI.2 — Ma trận hành động theo hạng mục đầu tư")
+    st.dataframe(action_df.round(3), use_container_width=True)
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("SP objective", f"{float(sp.get('objective', 0)):,.0f}")
+    c2.metric("VSS", f"{float(metrics_pack.get('VSS', 0)):,.0f}")
+    c3.metric("EVPI", f"{float(metrics_pack.get('EVPI', 0)):,.0f}")
+    c4.metric("Robust regret", f"{float(robust.get('max_regret', robust.get('objective', 0))):,.0f}")
+
+    fig_action = px.bar(
+        action_df,
+        x="Tên hạng mục",
+        y=["Ngân sách giai đoạn 1", "Recourse kỳ vọng"],
+        barmode="group",
+        title="Ảnh 10.AI.1 — Cơ cấu ngân sách here-and-now và recourse kỳ vọng",
+    )
+    fig_action.update_layout(height=500, yaxis_title="Tỷ VND")
+    st.plotly_chart(fig_action, use_container_width=True)
+
+    if not recourse_df.empty:
+        pivot_recourse = recourse_df.pivot_table(
+            index="scenario_name",
+            columns="item_name",
+            values="recourse_budget",
+            aggfunc="sum",
+        ).fillna(0)
+
+        st.subheader("Ảnh 10.AI.2 — Heatmap recourse theo kịch bản")
+        fig_recourse = px.imshow(
+            pivot_recourse,
+            text_auto=".0f",
+            aspect="auto",
+            title="Khi kịch bản thay đổi, ngân sách dự phòng được điều chỉnh vào đâu?",
+        )
+        fig_recourse.update_layout(height=520)
+        st.plotly_chart(fig_recourse, use_container_width=True)
+
+    scenario_compare = []
+    for name, sol in [("SP", sp), ("EEV", eev), ("ROBUST", robust)]:
+        vals = sol.get("scenario_values", pd.DataFrame()) if isinstance(sol, dict) else pd.DataFrame()
+        if isinstance(vals, pd.DataFrame) and not vals.empty:
+            temp = vals.copy()
+            temp["solution"] = name
+            scenario_compare.append(temp)
+    if scenario_compare:
+        scen_compare_df = pd.concat(scenario_compare, ignore_index=True)
+        fig_compare = px.bar(
+            scen_compare_df,
+            x="scenario_name",
+            y="total_value_if_s",
+            color="solution",
+            barmode="group",
+            title="Ảnh 10.AI.3 — So sánh giá trị theo kịch bản: SP, EEV và Robust",
+        )
+        fig_compare.update_layout(height=520, xaxis_title="Kịch bản", yaxis_title="Giá trị nếu kịch bản xảy ra")
+        st.plotly_chart(fig_compare, use_container_width=True)
+
+    result_table = action_df[[
+        "Hạng mục", "Tên hạng mục", "β kỳ vọng", "Ngân sách giai đoạn 1",
+        "Recourse kỳ vọng", "Tổng ngân sách kỳ vọng", "Khuyến nghị AI Analyst"
+    ]].copy()
+
+    x_sp = sp.get("x", {}) if isinstance(sp, dict) else {}
+    macro = expected_macro_indicators()
+    metrics = {
+        "Trang_thai_mo_hinh": sp.get("status", "Unknown"),
+        "SP_expected_value": float(sp.get("objective", np.nan)),
+        "EV_objective": float(ev.get("objective", np.nan)) if isinstance(ev, dict) else np.nan,
+        "EEV_objective": float(eev.get("objective", np.nan)) if isinstance(eev, dict) else np.nan,
+        "WS_expected": float(metrics_pack.get("WS_expected", np.nan)),
+        "VSS": float(metrics_pack.get("VSS", np.nan)),
+        "EVPI": float(metrics_pack.get("EVPI", np.nan)),
+        "Robust_max_regret": float(robust.get("max_regret", robust.get("objective", np.nan))) if isinstance(robust, dict) else np.nan,
+        "First_budget": 65000.0,
+        "Recourse_budget": 15000.0,
+        "x_I": float(x_sp.get("I", 0.0)),
+        "x_D": float(x_sp.get("D", 0.0)),
+        "x_AI": float(x_sp.get("AI", 0.0)),
+        "x_H": float(x_sp.get("H", 0.0)),
+        "Prob_bad_s3_s4": float(macro["prob_bad"]),
+        "FDI_expected": float(macro["fdi_expected"]),
+        "Export_growth_expected": float(macro["export_growth_expected"]),
+    }
+
+    policy_questions = (
+        "Quyết định here-and-now nên ưu tiên I, D, AI hay H trong điều kiện chưa biết kịch bản toàn cầu? "
+        "VSS và EVPI cho biết gì về giá trị của quy hoạch ngẫu nhiên và giá trị của thông tin dự báo? "
+        "Trong kịch bản bi quan hoặc khủng hoảng, H có đóng vai trò như hàng hóa bảo hiểm chính sách không? "
+        "Nên chọn nghiệm SP tối đa hóa kỳ vọng hay nghiệm robust regret khi Chính phủ muốn giảm rủi ro hối tiếc?"
+    )
+
+    if AI_AGENT_AVAILABLE and render_ai_agent is not None:
+        render_ai_agent(
+            bai_name="Bài 10 — Quy hoạch ngẫu nhiên hai giai đoạn dưới bất định",
+            model_goal=(
+                "Tối ưu hóa phân bổ ngân sách số Việt Nam 2026–2030 trong điều kiện bất định toàn cầu, "
+                "gồm quyết định giai đoạn 1 here-and-now cho I, D, AI, H và quyết định giai đoạn 2 recourse "
+                "theo 4 kịch bản lạc quan, cơ sở, bi quan và khủng hoảng."
+            ),
+            metrics=metrics,
+            result_table=result_table,
+            policy_questions=policy_questions,
+            key_suffix="bai10",
+        )
+    else:
+        st.info(
+            "Đã tạo đầy đủ bảng và biểu đồ AI Analyst. Khi bổ sung `ai_agent.py` và API key, phần phân tích tự động sẽ chạy ở đây."
+        )
+
+
 # ---------------------------------------------------------
 # 4. RENDER
 # ---------------------------------------------------------
@@ -1856,6 +2203,7 @@ def render():
         "10.4 Hệ số β",
         "10.5 Giải lập trình",
         "10.6 Chính sách",
+        "🤖 AI Analyst",
     ])
 
     with tabs[0]:
@@ -1875,3 +2223,6 @@ def render():
 
     with tabs[5]:
         show_policy_discussion()
+
+    with tabs[6]:
+        show_ai_policy_analysis()
