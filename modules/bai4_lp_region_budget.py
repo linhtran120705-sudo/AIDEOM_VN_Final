@@ -18,6 +18,13 @@ try:
 except ImportError:
     CVXPY_AVAILABLE = False
 
+try:
+    from ai_agent import render_ai_agent
+    AI_AGENT_AVAILABLE = True
+except Exception:
+    render_ai_agent = None
+    AI_AGENT_AVAILABLE = False
+
 
 # =========================================================
 # BÀI 4 — LP PHÂN BỔ NGÂN SÁCH SỐ THEO NGÀNH - VÙNG
@@ -1145,8 +1152,394 @@ def show_policy_discussion():
     """)
 
 
+
+
 # ---------------------------------------------------------
-# 11. HÀM RENDER CHÍNH
+# 11. PHẦN AI ANALYST — PHÂN TÍCH CHÍNH SÁCH NÂNG CAO
+# ---------------------------------------------------------
+def build_bai4_policy_intelligence(full_result, no_fair_result=None, no_cap_result=None):
+    """
+    Tạo bảng policy intelligence cho Bài 4.
+    Bảng này không thay đổi nghiệm LP, chỉ diễn giải nghiệm theo các lát cắt chính sách mới:
+    hiệu quả, công bằng vùng, năng lực hấp thụ AI, rủi ro tập trung và chi phí đánh đổi.
+    """
+    if full_result is None or full_result.get("status") != "Optimal":
+        return pd.DataFrame()
+
+    region_summary = full_result["region_summary"].copy()
+    item_summary = full_result["item_summary"].copy()
+    allocation_matrix = full_result["allocation_matrix"].copy()
+
+    total_budget_used = allocation_matrix.values.sum()
+    objective = full_result["objective"]
+    efficiency_ratio = objective / total_budget_used if total_budget_used else np.nan
+
+    top_region = region_summary.sort_values("Tổng ngân sách, tỷ VND", ascending=False).iloc[0]
+    lowest_initial_region = region_summary.sort_values("Digital Index ban đầu", ascending=True).iloc[0]
+    highest_initial_region = region_summary.sort_values("Digital Index ban đầu", ascending=False).iloc[0]
+
+    digital_gap_before = (
+        region_summary["Digital Index ban đầu"].max() -
+        region_summary["Digital Index ban đầu"].min()
+    )
+    digital_gap_after = (
+        region_summary["Digital Index sau đầu tư"].max() -
+        region_summary["Digital Index sau đầu tư"].min()
+    )
+    digital_gap_change = digital_gap_after - digital_gap_before
+
+    item_share = item_summary.set_index("Hạng mục")["Tỷ trọng, %"].to_dict()
+    ai_share = item_share.get("Năng lực AI", 0.0)
+    h_share = item_share.get("Nhân lực số", 0.0)
+    i_share = item_share.get("Hạ tầng số", 0.0)
+    d_share = item_share.get("CĐS doanh nghiệp", 0.0)
+
+    cost_fairness = np.nan
+    cost_fairness_pct = np.nan
+    if no_fair_result is not None and no_fair_result.get("status") == "Optimal":
+        cost_fairness = no_fair_result["objective"] - full_result["objective"]
+        cost_fairness_pct = cost_fairness / no_fair_result["objective"] * 100
+
+    cost_cap = np.nan
+    cost_cap_pct = np.nan
+    if no_cap_result is not None and no_cap_result.get("status") == "Optimal":
+        cost_cap = no_cap_result["objective"] - full_result["objective"]
+        cost_cap_pct = cost_cap / no_cap_result["objective"] * 100
+
+    concentration_hhi = ((region_summary["Tỷ trọng ngân sách, %"] / 100) ** 2).sum()
+
+    rows = [
+        {
+            "Lớp phân tích": "Hiệu quả tổng thể",
+            "Chỉ báo": "Z*/ngân sách sử dụng",
+            "Giá trị": efficiency_ratio,
+            "Diễn giải chính sách": (
+                "Đo hiệu quả chuyển hóa 1 tỷ VND ngân sách số thành GDP gain kỳ vọng. "
+                "Chỉ báo này giúp so sánh chất lượng phân bổ, không chỉ nhìn tổng Z*."
+            ),
+        },
+        {
+            "Lớp phân tích": "Công bằng vùng",
+            "Chỉ báo": "Thay đổi chênh lệch Digital Index sau đầu tư",
+            "Giá trị": digital_gap_change,
+            "Diễn giải chính sách": (
+                "Nếu giá trị âm, khoảng cách số giữa vùng mạnh và vùng yếu được thu hẹp. "
+                "Nếu dương, cần xem lại λ, γ hoặc trần/sàn vùng."
+            ),
+        },
+        {
+            "Lớp phân tích": "Chi phí công bằng",
+            "Chỉ báo": "Mất mát Z* do ràng buộc công bằng C5, %",
+            "Giá trị": cost_fairness_pct,
+            "Diễn giải chính sách": (
+                "Lượng hóa giá phải trả khi yêu cầu vùng yếu không bị bỏ lại quá xa. "
+                "Đây là đánh đổi giữa hiệu quả GDP ngắn hạn và phát triển bao trùm."
+            ),
+        },
+        {
+            "Lớp phân tích": "Phân quyền vùng",
+            "Chỉ báo": "Mất mát Z* do trần ngân sách vùng C3, %",
+            "Giá trị": cost_cap_pct,
+            "Diễn giải chính sách": (
+                "Cho biết chi phí của việc hạn chế tập trung vốn vào một số vùng mạnh. "
+                "Nếu chi phí thấp, C3 là công cụ phân quyền hợp lý."
+            ),
+        },
+        {
+            "Lớp phân tích": "Rủi ro tập trung",
+            "Chỉ báo": "HHI cơ cấu ngân sách vùng",
+            "Giá trị": concentration_hhi,
+            "Diễn giải chính sách": (
+                "HHI càng cao nghĩa là ngân sách càng tập trung vào ít vùng. "
+                "Chỉ báo này bổ sung cho việc nhìn đơn thuần vùng nhận ngân sách lớn nhất."
+            ),
+        },
+        {
+            "Lớp phân tích": "Năng lực hấp thụ AI",
+            "Chỉ báo": "Tỷ trọng ngân sách cho AI, %",
+            "Giá trị": ai_share,
+            "Diễn giải chính sách": (
+                "Nếu tỷ trọng AI cao ở vùng đã sẵn sàng số, mô hình nhấn mạnh hiệu quả ngắn hạn. "
+                "Nếu tỷ trọng H/I/D cao ở vùng yếu, mô hình ưu tiên xây nền trước khi mở rộng AI."
+            ),
+        },
+        {
+            "Lớp phân tích": "Nền tảng triển khai",
+            "Chỉ báo": "Tỷ trọng I + D + H, %",
+            "Giá trị": i_share + d_share + h_share,
+            "Diễn giải chính sách": (
+                "Đo mức ưu tiên cho hạ tầng số, chuyển đổi số doanh nghiệp và nhân lực số. "
+                "Đây là nhóm điều kiện nền để AI đi vào thực thi chính sách và đời sống."
+            ),
+        },
+        {
+            "Lớp phân tích": "Vùng cần chú ý",
+            "Chỉ báo": f"Vùng Digital Index thấp nhất: {lowest_initial_region['Vùng']}",
+            "Giá trị": lowest_initial_region["Digital Index ban đầu"],
+            "Diễn giải chính sách": (
+                "Vùng có nền tảng số ban đầu thấp cần được đọc như đối tượng ưu tiên năng lực nền, "
+                "không nên đánh giá chỉ bằng hệ số AI hiện tại."
+            ),
+        },
+        {
+            "Lớp phân tích": "Vùng có sức kéo",
+            "Chỉ báo": f"Vùng Digital Index cao nhất: {highest_initial_region['Vùng']}",
+            "Giá trị": highest_initial_region["Digital Index ban đầu"],
+            "Diễn giải chính sách": (
+                "Vùng có nền tảng số cao thường có khả năng hấp thụ AI và CĐS tốt hơn, "
+                "nhưng cần tránh để vốn tập trung quá mức gây nới rộng khoảng cách số."
+            ),
+        },
+        {
+            "Lớp phân tích": "Trung tâm ngân sách",
+            "Chỉ báo": f"Vùng nhận ngân sách lớn nhất: {top_region['Vùng']}",
+            "Giá trị": top_region["Tổng ngân sách, tỷ VND"],
+            "Diễn giải chính sách": (
+                "Vùng nhận vốn lớn nhất là điểm cần kiểm tra năng lực giải ngân, tác động lan tỏa "
+                "và khả năng phối hợp vùng, không chỉ xét hiệu quả biên β."
+            ),
+        },
+    ]
+
+    return pd.DataFrame(rows)
+
+
+def build_bai4_region_action_matrix(full_result):
+    """
+    Phân loại hành động chính sách cho từng vùng dựa trên:
+    - mức Digital Index ban đầu,
+    - khoản ngân sách được phân bổ,
+    - hạng mục được ưu tiên nhất,
+    - mức cải thiện Digital Index sau đầu tư.
+    """
+    if full_result is None or full_result.get("status") != "Optimal":
+        return pd.DataFrame()
+
+    region_summary = full_result["region_summary"].copy()
+    allocation = full_result["allocation_matrix"].copy()
+
+    rows = []
+    for _, row in region_summary.iterrows():
+        region = row["Vùng"]
+        top_item = allocation.loc[region].idxmax()
+        top_value = allocation.loc[region].max()
+        digital_initial = row["Digital Index ban đầu"]
+        digital_after = row["Digital Index sau đầu tư"]
+        improvement = digital_after - digital_initial
+        total_budget = row["Tổng ngân sách, tỷ VND"]
+
+        if digital_initial < 45 and top_item in ["Hạ tầng số", "Nhân lực số", "CĐS doanh nghiệp"]:
+            action = "Xây nền năng lực số trước"
+            recommendation = (
+                "Ưu tiên hạ tầng, nhân lực và chuyển đổi số doanh nghiệp để nâng năng lực hấp thụ công nghệ. "
+                "AI nên triển khai thí điểm sau khi điều kiện nền cải thiện."
+            )
+        elif digital_initial >= 70 and top_item in ["Năng lực AI", "CĐS doanh nghiệp"]:
+            action = "Tăng tốc AI và CĐS nâng cao"
+            recommendation = (
+                "Có thể triển khai AI, dữ liệu và tự động hóa ở quy mô lớn hơn, đồng thời yêu cầu lan tỏa sang vùng yếu hơn."
+            )
+        elif total_budget >= region_summary["Tổng ngân sách, tỷ VND"].median():
+            action = "Cân bằng hiệu quả và công bằng"
+            recommendation = (
+                "Vùng nhận ngân sách tương đối lớn, cần gắn phân bổ vốn với KPI về giải ngân, tăng Digital Index và lan tỏa vùng."
+            )
+        else:
+            action = "Theo dõi và hỗ trợ mục tiêu"
+            recommendation = (
+                "Duy trì mức đầu tư tối thiểu, chọn dự án có khả năng lan tỏa rõ, tránh phân tán nguồn lực vào quá nhiều mục tiêu."
+            )
+
+        rows.append({
+            "Vùng": region,
+            "Digital Index ban đầu": digital_initial,
+            "Digital Index sau đầu tư": digital_after,
+            "Cải thiện Digital Index": improvement,
+            "Tổng ngân sách, tỷ VND": total_budget,
+            "Hạng mục ưu tiên nhất": top_item,
+            "Ngân sách hạng mục ưu tiên, tỷ VND": top_value,
+            "Nhóm hành động": action,
+            "Khuyến nghị thực thi": recommendation,
+        })
+
+    return pd.DataFrame(rows)
+
+
+def show_ai_policy_analysis():
+    """
+    Tab AI Analyst cho Bài 4.
+    Phần này gọi render_ai_agent từ ai_agent.py, đồng thời thêm lớp phân tích mới:
+    policy intelligence, ma trận hành động vùng và bảng chỉ báo đánh đổi hiệu quả - công bằng.
+    """
+    st.header("🤖 AI Analyst — Phân tích phân bổ ngân sách số theo vùng")
+
+    st.markdown("""
+    Phần này bổ sung tác nhân AI cho Bài 4. AI không thay đổi nghiệm tối ưu của mô hình,
+    mà đọc kết quả LP theo các lớp chính sách: **hiệu quả kinh tế, công bằng vùng, năng lực hấp thụ AI,
+    chi phí của ràng buộc và khuyến nghị thực thi theo từng vùng**.
+    """)
+
+    if not AI_AGENT_AVAILABLE:
+        st.error(
+            "Chưa import được `render_ai_agent` từ `ai_agent.py`. "
+            "Hãy kiểm tra file `ai_agent.py` có nằm cùng cấp với `app.py` không."
+        )
+        return
+
+    if not PULP_AVAILABLE:
+        st.error("Cần cài PuLP để tạo kết quả đầu vào cho AI Analyst. Hãy thêm `pulp` vào requirements.txt.")
+        return
+
+    total_budget = 50000
+    min_region = 5000
+    max_region = 13000
+    min_h_total = 12000
+    gamma = 0.002
+    lam = 0.7
+
+    full = solve_pulp_model(
+        total_budget=total_budget,
+        min_region=min_region,
+        max_region=max_region,
+        min_h_total=min_h_total,
+        gamma=gamma,
+        lam=lam,
+        enforce_fairness=True,
+        enforce_region_cap=True,
+    )
+
+    no_fair = solve_pulp_model(
+        total_budget=total_budget,
+        min_region=min_region,
+        max_region=max_region,
+        min_h_total=min_h_total,
+        gamma=gamma,
+        lam=lam,
+        enforce_fairness=False,
+        enforce_region_cap=True,
+    )
+
+    no_cap = solve_pulp_model(
+        total_budget=total_budget,
+        min_region=min_region,
+        max_region=max_region,
+        min_h_total=min_h_total,
+        gamma=gamma,
+        lam=lam,
+        enforce_fairness=True,
+        enforce_region_cap=False,
+    )
+
+    if full is None or full.get("status") != "Optimal":
+        st.error("Mô hình gốc của Bài 4 chưa tối ưu nên chưa thể tạo phân tích AI.")
+        st.info("Gợi ý: dùng max_region = 13.000 hoặc giảm λ xuống 0,65 để mô hình khả thi hơn.")
+        return
+
+    policy_intel = build_bai4_policy_intelligence(full, no_fair, no_cap)
+    action_matrix = build_bai4_region_action_matrix(full)
+
+    st.subheader("Bảng 4.AI.1 — Policy intelligence cho nghiệm tối ưu")
+    st.dataframe(policy_intel.round(4), use_container_width=True)
+
+    st.subheader("Bảng 4.AI.2 — Ma trận hành động theo vùng")
+    st.dataframe(action_matrix.round(3), use_container_width=True)
+
+    fig_action = px.scatter(
+        action_matrix,
+        x="Digital Index ban đầu",
+        y="Tổng ngân sách, tỷ VND",
+        size="Ngân sách hạng mục ưu tiên, tỷ VND",
+        color="Nhóm hành động",
+        hover_name="Vùng",
+        title="Ảnh 4.AI.1 — Ma trận hành động: nền tảng số ban đầu × ngân sách tối ưu",
+    )
+    fig_action.update_layout(height=520)
+    st.plotly_chart(fig_action, use_container_width=True)
+
+    item_summary = full["item_summary"].copy()
+    region_summary = full["region_summary"].copy()
+
+    top_region = region_summary.sort_values("Tổng ngân sách, tỷ VND", ascending=False).iloc[0]
+    weakest_region = region_summary.sort_values("Digital Index ban đầu", ascending=True).iloc[0]
+    strongest_region = region_summary.sort_values("Digital Index ban đầu", ascending=False).iloc[0]
+
+    no_fair_objective = np.nan
+    cost_fairness = np.nan
+    cost_fairness_pct = np.nan
+    if no_fair is not None and no_fair.get("status") == "Optimal":
+        no_fair_objective = no_fair["objective"]
+        cost_fairness = no_fair["objective"] - full["objective"]
+        cost_fairness_pct = cost_fairness / no_fair["objective"] * 100
+
+    no_cap_objective = np.nan
+    cost_cap = np.nan
+    cost_cap_pct = np.nan
+    if no_cap is not None and no_cap.get("status") == "Optimal":
+        no_cap_objective = no_cap["objective"]
+        cost_cap = no_cap["objective"] - full["objective"]
+        cost_cap_pct = cost_cap / no_cap["objective"] * 100
+
+    digital_gap_before = region_summary["Digital Index ban đầu"].max() - region_summary["Digital Index ban đầu"].min()
+    digital_gap_after = region_summary["Digital Index sau đầu tư"].max() - region_summary["Digital Index sau đầu tư"].min()
+
+    metrics = {
+        "Tong_ngan_sach_ty_VND": float(total_budget),
+        "Trang_thai_mo_hinh": str(full["status"]),
+        "Z_co_cong_bang_C5": float(full["objective"]),
+        "Z_khong_cong_bang_C5": float(no_fair_objective) if not pd.isna(no_fair_objective) else None,
+        "Chi_phi_cong_bang_ty_VND": float(cost_fairness) if not pd.isna(cost_fairness) else None,
+        "Chi_phi_cong_bang_pct": float(cost_fairness_pct) if not pd.isna(cost_fairness_pct) else None,
+        "Z_bo_tran_vung_C3": float(no_cap_objective) if not pd.isna(no_cap_objective) else None,
+        "Chi_phi_tran_vung_C3_pct": float(cost_cap_pct) if not pd.isna(cost_cap_pct) else None,
+        "Vung_nhan_ngan_sach_lon_nhat": str(top_region["Vùng"]),
+        "Ngan_sach_vung_lon_nhat_ty_VND": float(top_region["Tổng ngân sách, tỷ VND"]),
+        "Vung_Digital_Index_thap_nhat": str(weakest_region["Vùng"]),
+        "Digital_Index_thap_nhat": float(weakest_region["Digital Index ban đầu"]),
+        "Vung_Digital_Index_cao_nhat": str(strongest_region["Vùng"]),
+        "Digital_Index_cao_nhat": float(strongest_region["Digital Index ban đầu"]),
+        "Khoang_cach_Digital_Index_truoc_dau_tu": float(digital_gap_before),
+        "Khoang_cach_Digital_Index_sau_dau_tu": float(digital_gap_after),
+        "Tong_dau_tu_AI_ty_VND": float(item_summary.loc[item_summary["Hạng mục"] == "Năng lực AI", "Tổng ngân sách, tỷ VND"].iloc[0]),
+        "Tong_dau_tu_H_ty_VND": float(item_summary.loc[item_summary["Hạng mục"] == "Nhân lực số", "Tổng ngân sách, tỷ VND"].iloc[0]),
+        "Tong_dau_tu_I_ty_VND": float(item_summary.loc[item_summary["Hạng mục"] == "Hạ tầng số", "Tổng ngân sách, tỷ VND"].iloc[0]),
+        "Tong_dau_tu_D_ty_VND": float(item_summary.loc[item_summary["Hạng mục"] == "CĐS doanh nghiệp", "Tổng ngân sách, tỷ VND"].iloc[0]),
+        "lambda_cong_bang": float(lam),
+        "gamma_hieu_qua_dau_tu_D": float(gamma),
+    }
+
+    ai_result_table = action_matrix[[
+        "Vùng",
+        "Digital Index ban đầu",
+        "Digital Index sau đầu tư",
+        "Tổng ngân sách, tỷ VND",
+        "Hạng mục ưu tiên nhất",
+        "Nhóm hành động",
+        "Khuyến nghị thực thi",
+    ]].copy()
+
+    policy_questions = (
+        "Nếu bỏ ràng buộc công bằng C5, vốn sẽ tập trung vào vùng nào và rủi ro dài hạn là gì? "
+        "Ràng buộc trần vùng C3 có thể xem là chính sách phân quyền hay không, và chi phí đánh đổi là bao nhiêu? "
+        "Với vùng nền tảng số yếu như Tây Nguyên hoặc Trung du miền núi phía Bắc, nên đầu tư AI ngay hay ưu tiên H/I/D trước? "
+        "Kết quả mô hình gợi ý cơ chế phối hợp trung ương - địa phương như thế nào để vừa hiệu quả vừa bao trùm?"
+    )
+
+    render_ai_agent(
+        bai_name="Bài 4 — Phân bổ ngân sách số theo ngành - vùng bằng quy hoạch tuyến tính",
+        model_goal=(
+            "Tối ưu hóa phân bổ 50.000 tỷ VND ngân sách kinh tế số cho 6 vùng kinh tế - xã hội "
+            "và 4 hạng mục đầu tư I, D, AI, H nhằm tối đa hóa GDP gain, đồng thời bảo đảm sàn vùng, "
+            "trần vùng, sàn nhân lực số và ràng buộc công bằng Digital Index giữa các vùng."
+        ),
+        metrics=metrics,
+        result_table=ai_result_table,
+        policy_questions=policy_questions,
+        key_suffix="bai4",
+    )
+
+
+# ---------------------------------------------------------
+# 12. HÀM RENDER CHÍNH
 # ---------------------------------------------------------
 def render():
     st.title("🧭 Bài 4 — Quy hoạch tuyến tính phân bổ ngân sách số theo ngành - vùng")
@@ -1163,6 +1556,7 @@ def render():
         "4.3 Dữ liệu β",
         "4.4 Giải lập trình",
         "4.5 Chính sách",
+        "🤖 AI Analyst",
     ])
 
     with tabs[0]:
@@ -1179,3 +1573,6 @@ def render():
 
     with tabs[4]:
         show_policy_discussion()
+
+    with tabs[5]:
+        show_ai_policy_analysis()
