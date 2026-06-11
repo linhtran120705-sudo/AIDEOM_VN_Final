@@ -742,11 +742,17 @@ def render():
 
     st.markdown("""
     Module này trình bày Bài 1 theo đúng logic của một bài phân tích mô hình ra quyết định:
-    **bối cảnh → mô hình → dữ liệu → tính toán → mô phỏng → thảo luận chính sách**.
+    **bối cảnh → mô hình → dữ liệu → tính toán → mô phỏng → thảo luận chính sách → AI Analyst**.
     """)
 
+    # -----------------------------------------------------
+    # 1. Đọc dữ liệu
+    # -----------------------------------------------------
     df = load_macro_data()
 
+    # -----------------------------------------------------
+    # 2. Nhập tham số trên sidebar
+    # -----------------------------------------------------
     st.sidebar.markdown("### Tham số Bài 1")
     alpha = st.sidebar.slider("Bài 1 - α - Vốn K", 0.10, 0.60, 0.33, 0.01, key="bai1_alpha")
     beta = st.sidebar.slider("Bài 1 - β - Lao động L", 0.10, 0.60, 0.42, 0.01, key="bai1_beta")
@@ -754,19 +760,38 @@ def render():
     delta = st.sidebar.slider("Bài 1 - δ - AI", 0.00, 0.30, 0.08, 0.01, key="bai1_delta")
 
     theta = 1 - alpha - beta - gamma - delta
-
     st.sidebar.metric("Bài 1 - θ - Nhân lực số H", f"{theta:.2f}")
 
     if theta < 0:
-        st.sidebar.error("Tổng hệ số đang lớn hơn 1.")
+        st.sidebar.error("Tổng hệ số α + β + γ + δ đang lớn hơn 1. Cần giảm một hoặc nhiều hệ số.")
         st.stop()
 
+    if theta > 0.30:
+        st.sidebar.warning("θ đang khá lớn. Nên kiểm tra lại giả định vì nhân lực số có thể bị gán vai trò quá cao.")
+
+    # -----------------------------------------------------
+    # 3. Tính toán một lần để dùng thống nhất cho chính sách và AI
+    # -----------------------------------------------------
+    df_model, A_bar, mape = calculate_model(df, alpha, beta, gamma, delta, theta)
+    ga, ga_summary, avg_growth = calculate_growth_accounting(
+        df_model, alpha, beta, gamma, delta, theta
+    )
+    scenario_2030 = simulate_2030(df_model, alpha, beta, gamma, delta, theta)
+
+    y_2025 = df_model.loc[df_model["year"] == 2025, "Y"].iloc[0]
+    y_2030 = scenario_2030.loc[scenario_2030["year"] == 2030, "Y_forecast"].iloc[0]
+    growth_2030 = (y_2030 / y_2025 - 1) * 100
+
+    # -----------------------------------------------------
+    # 4. Tạo 6 tab, trong đó tab thứ 6 là AI Analyst
+    # -----------------------------------------------------
     tabs = st.tabs([
         "1.1 Bối cảnh",
         "1.2 Mô hình",
         "1.3 Dữ liệu",
         "1.4 Tính toán",
         "1.5 Chính sách",
+        "🤖 AI Analyst",
     ])
 
     with tabs[0]:
@@ -779,35 +804,20 @@ def render():
         show_data(df)
 
     with tabs[3]:
-        df_model, ga_summary, scenario_2030, mape = show_requirement_14(
-            df, alpha, beta, gamma, delta, theta
-        )
+        show_requirement_14(df, alpha, beta, gamma, delta, theta)
 
     with tabs[4]:
-        df_model, A_bar, mape = calculate_model(df, alpha, beta, gamma, delta, theta)
-        ga, ga_summary, avg_growth = calculate_growth_accounting(
-            df_model, alpha, beta, gamma, delta, theta
-        )
-        scenario_2030 = simulate_2030(df_model, alpha, beta, gamma, delta, theta)
         show_policy_discussion(df_model, ga_summary, scenario_2030)
+
     with tabs[5]:
-    df_model, A_bar, mape = calculate_model(df, alpha, beta, gamma, delta, theta)
-    ga, ga_summary, avg_growth = calculate_growth_accounting(
-        df_model, alpha, beta, gamma, delta, theta
-    )
-    scenario_2030 = simulate_2030(df_model, alpha, beta, gamma, delta, theta)
+        st.header("🤖 AI Analyst cho Bài 1")
 
-    y_2025 = df_model.loc[df_model["year"] == 2025, "Y"].iloc[0]
-    y_2030 = scenario_2030.loc[scenario_2030["year"] == 2030, "Y_forecast"].iloc[0]
-    growth_2030 = (y_2030 / y_2025 - 1) * 100
+        st.info(
+            "Tác nhân AI đọc các kết quả đã tính ở Bài 1, gồm TFP, MAPE, phân rã tăng trưởng "
+            "và kịch bản GDP 2030, sau đó diễn giải thành nhận xét học thuật và hàm ý chính sách."
+        )
 
-    render_ai_agent(
-        bai_name="Bài 1 — Hàm sản xuất Cobb-Douglas mở rộng với AI và số hóa",
-        model_goal=(
-            "Ước lượng TFP, kiểm tra sai số dự báo GDP, phân rã tăng trưởng "
-            "và mô phỏng kịch bản GDP Việt Nam đến năm 2030."
-        ),
-        metrics={
+        ai_metrics = {
             "A_bar": float(A_bar),
             "MAPE_pct": float(mape),
             "avg_growth_log_pct": float(avg_growth),
@@ -819,13 +829,23 @@ def render():
             "gamma_D": float(gamma),
             "delta_AI": float(delta),
             "theta_H": float(theta),
-        },
-        result_table=ga_summary.round(3),
-        policy_questions=(
-            "TFP tăng hay giảm và điều đó nói gì về chất lượng tăng trưởng? "
-            "Trong ba yếu tố D, AI, H, yếu tố nào đóng góp nhiều nhất? "
-            "Mục tiêu kinh tế số đạt 30% GDP vào năm 2030 có khả thi không? "
-            "Từ kết quả mô hình, cần ưu tiên chính sách nào cho Việt Nam?"
-        ),
-        key_suffix="bai1"
-    )
+        }
+
+        ai_result_table = ga_summary.round(3)
+
+        render_ai_agent(
+            bai_name="Bài 1 — Hàm sản xuất Cobb-Douglas mở rộng với AI và số hóa",
+            model_goal=(
+                "Ước lượng TFP, kiểm tra sai số dự báo GDP, phân rã tăng trưởng "
+                "và mô phỏng kịch bản GDP Việt Nam đến năm 2030."
+            ),
+            metrics=ai_metrics,
+            result_table=ai_result_table,
+            policy_questions=(
+                "TFP tăng hay giảm và điều đó nói gì về chất lượng tăng trưởng? "
+                "Trong ba yếu tố D, AI, H, yếu tố nào đóng góp nhiều nhất? "
+                "Mục tiêu kinh tế số đạt 30% GDP vào năm 2030 có khả thi không? "
+                "Từ kết quả mô hình, cần ưu tiên chính sách nào cho Việt Nam?"
+            ),
+            key_suffix="bai1"
+        )
