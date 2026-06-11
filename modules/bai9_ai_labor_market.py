@@ -11,6 +11,14 @@ except ImportError:
     PULP_AVAILABLE = False
 
 
+try:
+    from ai_agent import render_ai_agent
+    AI_AGENT_AVAILABLE = True
+except Exception:
+    render_ai_agent = None
+    AI_AGENT_AVAILABLE = False
+
+
 # =========================================================
 # BÀI 9 — TÁC ĐỘNG AI TỚI THỊ TRƯỜNG LAO ĐỘNG VIỆT NAM
 # LP: AI, tự động hóa, đào tạo lại và NetJob theo ngành
@@ -1372,6 +1380,364 @@ def show_policy_discussion():
     """)
 
 
+
+
+# ---------------------------------------------------------
+# 5. AI ANALYST — PHÂN TÍCH CHÍNH SÁCH NÂNG CAO
+# ---------------------------------------------------------
+def build_labor_policy_intelligence(result, result_5pct=None, sensitivity_df=None):
+    """Tạo bảng policy intelligence từ nghiệm LP Bài 9."""
+    if result is None or result.get("status") != "Optimal":
+        return pd.DataFrame()
+
+    res_df = result["result_df"].copy()
+    summary = result["summary"]
+    constraints_df = result.get("constraints_df", pd.DataFrame())
+
+    total_budget_used = summary.get("total_budget_used", 0.0)
+    total_netjob = summary.get("objective_total_netjob", 0.0)
+    total_displaced = summary.get("total_displaced", 0.0)
+    total_retrain = summary.get("total_retrain_capacity", 0.0)
+    total_ai = summary.get("total_x_AI", 0.0)
+    total_h = summary.get("total_x_H", 0.0)
+
+    top_net = res_df.sort_values("NetJob", ascending=False).iloc[0]
+    top_budget = res_df.assign(total_budget=res_df["x_AI"] + res_df["x_H"]).sort_values("total_budget", ascending=False).iloc[0]
+    top_displaced = res_df.sort_values("DisplacedJob", ascending=False).iloc[0]
+
+    pressure = res_df["DisplacedJob"] / (res_df["RetrainingCapacity"] + 1e-9)
+    max_pressure = float(pressure.max())
+    pressure_sector = str(res_df.iloc[int(pressure.idxmax())]["sector"])
+
+    binding_count = int(constraints_df["binding?"].sum()) if not constraints_df.empty and "binding?" in constraints_df else 0
+    automation_controlled = int((res_df["DisplacedJob"] <= res_df["RetrainingCapacity"] + 1e-6).sum())
+
+    cap_status = "Không chạy"
+    cap_netjob_change = np.nan
+    cap_displaced_change = np.nan
+    if result_5pct is not None:
+        cap_status = result_5pct.get("status", "Không chạy")
+        if cap_status == "Optimal":
+            cap_sum = result_5pct["summary"]
+            cap_netjob_change = cap_sum["objective_total_netjob"] - total_netjob
+            cap_displaced_change = cap_sum["total_displaced"] - total_displaced
+
+    marginal_netjob = np.nan
+    if sensitivity_df is not None and not sensitivity_df.empty:
+        clean = sensitivity_df.dropna(subset=["total_netjob"]).sort_values("budget")
+        if len(clean) >= 2:
+            marginal_netjob = (
+                clean["total_netjob"].iloc[-1] - clean["total_netjob"].iloc[-2]
+            ) / (
+                clean["budget"].iloc[-1] - clean["budget"].iloc[-2]
+            )
+
+    return pd.DataFrame({
+        "Lớp phân tích": [
+            "Hiệu quả việc làm ròng",
+            "Cấu trúc ngân sách AI-H",
+            "Kiểm soát tự động hóa",
+            "Áp lực đào tạo lại lớn nhất",
+            "Ngành tạo NetJob lớn nhất",
+            "Ngành nhận ngân sách lớn nhất",
+            "Ngành có dịch chuyển lớn nhất",
+            "Ràng buộc đang chi phối",
+            "Chi phí ràng buộc an sinh 5%",
+            "Độ nhạy ngân sách",
+        ],
+        "Chỉ báo": [
+            "NetJob / tổng ngân sách",
+            "Tỷ trọng AI và đào tạo H",
+            "Số ngành có DisplacedJob ≤ RetrainingCapacity",
+            "AutomationPressure cao nhất",
+            "Top NetJob",
+            "Top ngân sách",
+            "Top DisplacedJob",
+            "Số ràng buộc binding",
+            "ΔNetJob khi thêm DisplacedJobᵢ ≤ 0,05Lᵢ",
+            "NetJob biên ở mức ngân sách cao nhất",
+        ],
+        "Giá trị": [
+            f"{total_netjob / (total_budget_used + 1e-9):,.2f} việc/tỷ VND",
+            f"AI {total_ai / (total_budget_used + 1e-9) * 100:.1f}% | H {total_h / (total_budget_used + 1e-9) * 100:.1f}%",
+            f"{automation_controlled}/{len(res_df)} ngành",
+            f"{max_pressure:.3f} tại {pressure_sector}",
+            f"{top_net['sector']} ({top_net['NetJob']:,.0f} việc)",
+            f"{top_budget['sector']} ({top_budget['total_budget']:,.0f} tỷ VND)",
+            f"{top_displaced['sector']} ({top_displaced['DisplacedJob']:,.0f} việc)",
+            f"{binding_count} ràng buộc",
+            f"{cap_status}; ΔNetJob = {cap_netjob_change:,.0f}; ΔDisplaced = {cap_displaced_change:,.0f}",
+            "Không đủ dữ liệu" if pd.isna(marginal_netjob) else f"{marginal_netjob:,.2f} việc/tỷ VND",
+        ],
+        "Diễn giải chính sách": [
+            "Đo mức tạo việc làm ròng trên mỗi tỷ đồng ngân sách; dùng để đánh giá hiệu quả lao động của chương trình AI.",
+            "Cho biết mô hình đang thiên về mở rộng AI hay đào tạo lại; tỷ trọng H cao giúp giảm rủi ro dịch chuyển lao động.",
+            "Nếu đủ 8/8 ngành, tốc độ tự động hóa đang được kiểm soát bởi năng lực đào tạo lại.",
+            "Ngành có AutomationPressure cao cần giám sát vì tốc độ AI gần chạm năng lực đào tạo lại.",
+            "Ngành này là điểm tựa tạo việc làm ròng, nhưng cần xem chất lượng việc làm và khả năng hấp thụ kỹ năng.",
+            "Ngành nhận ngân sách lớn cần cơ chế KPI, giám sát giải ngân và đánh giá tác động việc làm.",
+            "Ngành này cần ưu tiên chương trình chuyển đổi kỹ năng, bảo hiểm thất nghiệp chủ động và tư vấn việc làm.",
+            "Ràng buộc binding cho thấy điểm nghẽn chính sách, ví dụ ngân sách tổng, sàn AI/H hoặc trần ngành.",
+            "Ràng buộc 5% là hàng rào an sinh; nếu làm giảm NetJob nhiều, cần tăng ngân sách đào tạo hoặc nới tốc độ AI theo lộ trình.",
+            "Nếu NetJob biên còn cao, tăng ngân sách vẫn có hiệu quả; nếu giảm mạnh, cần chuyển từ mở rộng ngân sách sang cải thiện chất lượng đào tạo.",
+        ],
+    })
+
+
+def build_labor_action_matrix(res_df):
+    """Tạo ma trận hành động theo ngành từ nghiệm LP."""
+    if res_df is None or res_df.empty:
+        return pd.DataFrame()
+
+    df = res_df.copy()
+    df["Tổng ngân sách, tỷ VND"] = df["x_AI"] + df["x_H"]
+    df["AutomationPressure"] = df["DisplacedJob"] / (df["RetrainingCapacity"] + 1e-9)
+    df["NetJob_per_1k_budget"] = df["NetJob"] / (df["Tổng ngân sách, tỷ VND"] + 1e-9) * 1000
+
+    median_eff = df.loc[df["Tổng ngân sách, tỷ VND"] > 1e-9, "NetJob_per_budget"].median()
+    if pd.isna(median_eff):
+        median_eff = 0.0
+
+    groups = []
+    recommendations = []
+
+    for _, row in df.iterrows():
+        budget = row["Tổng ngân sách, tỷ VND"]
+        pressure = row["AutomationPressure"]
+        risk = row["risk_pct"]
+        vulnerable = bool(row["vulnerable_group"])
+        eff = row["NetJob_per_budget"]
+        ai_share = row["AI_budget_share_pct"]
+
+        if budget <= 1e-6:
+            group = "Theo dõi, chưa ưu tiên ngân sách"
+            rec = "Chưa nên mở rộng ngân sách trong kịch bản hiện tại; theo dõi rủi ro tự động hóa và chuẩn bị dữ liệu kỹ năng ngành."
+        elif pressure >= 0.85 or risk >= 45:
+            group = "AI đi kèm đào tạo bắt buộc"
+            rec = "Mỗi gói AI phải gắn với gói đào tạo lại, chứng chỉ kỹ năng số và cơ chế chuyển việc nội ngành để tránh sốc lao động."
+        elif vulnerable and ai_share < 50:
+            group = "Đào tạo trước, AI hỗ trợ"
+            rec = "Ưu tiên kỹ năng số cơ bản, nền tảng dữ liệu và công cụ AI hỗ trợ năng suất thay vì tự động hóa thay thế trực tiếp."
+        elif eff >= median_eff and ai_share >= 45:
+            group = "Mở rộng AI có chọn lọc"
+            rec = "Có thể mở rộng AI nhanh hơn, nhưng cần KPI NetJob, năng suất và chất lượng việc làm mới."
+        else:
+            group = "Triển khai cân bằng AI-H"
+            rec = "Duy trì tỷ lệ phối hợp AI và đào tạo, đánh giá định kỳ DisplacedJob và RetrainingCapacity."
+
+        groups.append(group)
+        recommendations.append(rec)
+
+    out = df[[
+        "sector", "labor_million", "risk_pct", "x_AI", "x_H",
+        "NewJob_AI", "UpgradeJob", "DisplacedJob", "RetrainingCapacity",
+        "NetJob", "AutomationPressure", "Displaced_share_labor_pct",
+        "AI_budget_share_pct", "H_budget_share_pct",
+    ]].copy()
+
+    out = out.rename(columns={
+        "sector": "Ngành",
+        "labor_million": "Lao động, triệu",
+        "risk_pct": "Risk, %",
+        "x_AI": "Đầu tư AI, tỷ VND",
+        "x_H": "Đào tạo H, tỷ VND",
+        "NewJob_AI": "Việc làm AI mới",
+        "UpgradeJob": "Việc nâng kỹ năng",
+        "DisplacedJob": "Việc bị dịch chuyển",
+        "RetrainingCapacity": "Năng lực đào tạo lại",
+        "NetJob": "NetJob ròng",
+        "AutomationPressure": "Áp lực tự động hóa/đào tạo",
+        "Displaced_share_labor_pct": "Dịch chuyển/LĐ ngành, %",
+        "AI_budget_share_pct": "Tỷ trọng AI, %",
+        "H_budget_share_pct": "Tỷ trọng H, %",
+    })
+    out["Nhóm hành động"] = groups
+    out["Khuyến nghị thực thi"] = recommendations
+    return out
+
+
+def show_ai_policy_analysis():
+    st.header("🤖 AI Analyst — Phân tích lao động, AI và đào tạo lại")
+
+    st.markdown("""
+    Tab này chạy một cấu hình chuẩn của Bài 9 để tạo dữ liệu đầu vào cho AI Analyst.
+    Phần phân tích tập trung vào ba điểm: ngành nào tạo việc làm ròng tốt nhất, ngành nào có rủi ro dịch chuyển lao động lớn nhất,
+    và đào tạo lại có đủ hấp thụ tốc độ tự động hóa hay không.
+    """)
+
+    if not PULP_AVAILABLE:
+        st.error("Chưa cài `pulp`, nên chưa thể chạy LP cho AI Analyst. Hãy thêm `pulp` vào requirements.txt.")
+        return
+
+    total_budget = 30000.0
+    result = solve_labor_lp(
+        total_budget=total_budget,
+        mode="policy_balanced",
+        add_5pct_cap=False,
+        max_sector_share=0.30,
+        min_ai_share=0.18,
+        min_h_share=0.25,
+        min_vulnerable_h_share=0.18,
+        min_manufacturing_h=0.0,
+    )
+    result_5pct = solve_labor_lp(
+        total_budget=total_budget,
+        mode="policy_balanced",
+        add_5pct_cap=True,
+        max_sector_share=0.30,
+        min_ai_share=0.18,
+        min_h_share=0.25,
+        min_vulnerable_h_share=0.18,
+        min_manufacturing_h=0.0,
+    )
+    sensitivity_df = sensitivity_budget_curve(mode="policy_balanced", add_5pct_cap=False)
+
+    if result is None or result.get("status") != "Optimal":
+        st.error("Cấu hình chuẩn của AI Analyst chưa tìm được nghiệm tối ưu. Hãy kiểm tra PuLP/CBC hoặc nới ràng buộc.")
+        return
+
+    res_df = result["result_df"].copy()
+    summary = result["summary"]
+    action_matrix = build_labor_action_matrix(res_df)
+    policy_intelligence = build_labor_policy_intelligence(result, result_5pct, sensitivity_df)
+
+    total_budget_used = summary["total_budget_used"]
+    total_netjob = summary["objective_total_netjob"]
+    total_displaced = summary["total_displaced"]
+    total_retrain = summary["total_retrain_capacity"]
+    total_ai = summary["total_x_AI"]
+    total_h = summary["total_x_H"]
+
+    top_net = res_df.sort_values("NetJob", ascending=False).iloc[0]
+    top_displaced = res_df.sort_values("DisplacedJob", ascending=False).iloc[0]
+    pressure = res_df["DisplacedJob"] / (res_df["RetrainingCapacity"] + 1e-9)
+    pressure_sector = res_df.iloc[int(pressure.idxmax())]
+
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Tổng NetJob", f"{total_netjob:,.0f}", "việc làm")
+    m2.metric("Tổng AI", f"{total_ai:,.0f}", "tỷ VND")
+    m3.metric("Tổng đào tạo H", f"{total_h:,.0f}", "tỷ VND")
+    m4.metric("Displaced/Retrain", f"{total_displaced / (total_retrain + 1e-9):.3f}")
+
+    st.subheader("Bảng 9.AI.1 — Policy intelligence cho thị trường lao động dưới tác động AI")
+    st.dataframe(policy_intelligence, use_container_width=True)
+
+    st.subheader("Bảng 9.AI.2 — Ma trận hành động theo ngành")
+    st.dataframe(action_matrix.round(3), use_container_width=True)
+
+    st.subheader("Ảnh 9.AI.1 — NetJob, việc bị dịch chuyển và đào tạo lại theo ngành")
+    chart_df = res_df[["sector", "NewJob_AI", "UpgradeJob", "DisplacedJob", "RetrainingCapacity", "NetJob"]].copy()
+    chart_long = chart_df.melt(
+        id_vars="sector",
+        value_vars=["NewJob_AI", "UpgradeJob", "DisplacedJob", "RetrainingCapacity", "NetJob"],
+        var_name="Chỉ tiêu",
+        value_name="Việc làm",
+    )
+    fig = px.bar(
+        chart_long,
+        x="sector",
+        y="Việc làm",
+        color="Chỉ tiêu",
+        barmode="group",
+        title="Việc làm AI mới, nâng kỹ năng, dịch chuyển và NetJob theo ngành",
+    )
+    fig.update_layout(height=580, xaxis_tickangle=-25)
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.subheader("Ảnh 9.AI.2 — Bản đồ rủi ro: Risk × AutomationPressure")
+    risk_map = res_df.copy()
+    risk_map["AutomationPressure"] = risk_map["DisplacedJob"] / (risk_map["RetrainingCapacity"] + 1e-9)
+    risk_map["Tổng ngân sách"] = risk_map["x_AI"] + risk_map["x_H"]
+    fig2 = px.scatter(
+        risk_map,
+        x="risk_pct",
+        y="AutomationPressure",
+        size="Tổng ngân sách",
+        color="NetJob",
+        hover_name="sector",
+        text="sector_id",
+        title="Ngành nào vừa rủi ro cao vừa cần đào tạo lại sát tốc độ tự động hóa?",
+        labels={"risk_pct": "Risk tự động hóa, %", "AutomationPressure": "DisplacedJob / RetrainingCapacity"},
+    )
+    fig2.add_hline(y=1.0, line_dash="dash", annotation_text="Ngưỡng đào tạo vừa đủ")
+    fig2.update_traces(textposition="top center")
+    fig2.update_layout(height=540)
+    st.plotly_chart(fig2, use_container_width=True)
+
+    st.subheader("Ảnh 9.AI.3 — Độ nhạy ngân sách đối với NetJob")
+    if sensitivity_df is not None and not sensitivity_df.empty:
+        fig3 = px.line(
+            sensitivity_df,
+            x="budget",
+            y="total_netjob",
+            markers=True,
+            title="Tổng NetJob thay đổi khi ngân sách tăng",
+            labels={"budget": "Ngân sách, tỷ VND", "total_netjob": "Tổng NetJob"},
+        )
+        fig3.update_layout(height=460)
+        st.plotly_chart(fig3, use_container_width=True)
+        st.dataframe(sensitivity_df.round(3), use_container_width=True)
+
+    metrics = {
+        "Tong_ngan_sach_ty_VND": float(total_budget),
+        "Trang_thai_mo_hinh": str(result["status"]),
+        "Tong_NetJob": float(total_netjob),
+        "Tong_dau_tu_AI_ty_VND": float(total_ai),
+        "Tong_dao_tao_H_ty_VND": float(total_h),
+        "Tong_NewJob_AI": float(summary["total_new_job"]),
+        "Tong_UpgradeJob": float(summary["total_upgrade_job"]),
+        "Tong_DisplacedJob": float(total_displaced),
+        "Tong_RetrainingCapacity": float(total_retrain),
+        "Ty_le_AI_trong_ngan_sach_pct": float(total_ai / (total_budget_used + 1e-9) * 100),
+        "Ty_le_H_trong_ngan_sach_pct": float(total_h / (total_budget_used + 1e-9) * 100),
+        "Nganh_NetJob_cao_nhat": str(top_net["sector"]),
+        "NetJob_cao_nhat": float(top_net["NetJob"]),
+        "Nganh_Displaced_cao_nhat": str(top_displaced["sector"]),
+        "Displaced_cao_nhat": float(top_displaced["DisplacedJob"]),
+        "Nganh_AutomationPressure_cao_nhat": str(pressure_sector["sector"]),
+        "AutomationPressure_cao_nhat": float(pressure.max()),
+        "Rang_buoc_5pct_status": str(result_5pct.get("status") if result_5pct else "Không chạy"),
+    }
+
+    ai_result_table = action_matrix[[
+        "Ngành",
+        "Risk, %",
+        "Đầu tư AI, tỷ VND",
+        "Đào tạo H, tỷ VND",
+        "Việc bị dịch chuyển",
+        "Năng lực đào tạo lại",
+        "NetJob ròng",
+        "Áp lực tự động hóa/đào tạo",
+        "Nhóm hành động",
+        "Khuyến nghị thực thi",
+    ]].copy()
+
+    policy_questions = (
+        "Ngành nào nên ưu tiên đầu tư AI và đào tạo lại trước để tối đa hóa NetJob nhưng không gây sốc lao động? "
+        "Ràng buộc DisplacedJobᵢ ≤ RetrainingCapacityᵢ đang hàm ý gì về tốc độ tự động hóa hợp lý? "
+        "Nếu thêm hàng rào DisplacedJobᵢ ≤ 0,05Lᵢ, chính sách đánh đổi giữa hiệu quả việc làm và an sinh xã hội như thế nào? "
+        "Với nhóm lao động dễ tổn thương như nông nghiệp, xây dựng và bán lẻ, nên ưu tiên AI thay thế hay AI hỗ trợ kèm đào tạo?"
+    )
+
+    if AI_AGENT_AVAILABLE:
+        render_ai_agent(
+            bai_name="Bài 9 — Tác động AI tới thị trường lao động Việt Nam bằng mô hình LP NetJob",
+            model_goal=(
+                "Tối ưu hóa phân bổ ngân sách AI và đào tạo lại theo 8 ngành nhằm tối đa hóa NetJob ròng, "
+                "đồng thời bảo đảm không ngành nào có NetJob âm và tốc độ tự động hóa không vượt quá năng lực đào tạo lại."
+            ),
+            metrics=metrics,
+            result_table=ai_result_table.round(3),
+            policy_questions=policy_questions,
+            key_suffix="bai9",
+        )
+    else:
+        st.warning(
+            "Tab AI Analyst đã được tạo, nhưng chưa tìm thấy `ai_agent.py` hoặc chưa import được `render_ai_agent`. "
+            "Hãy đặt `ai_agent.py` cùng cấp với `app.py` để bật phần phân tích AI tự động."
+        )
+
+
 # ---------------------------------------------------------
 # 4. RENDER
 # ---------------------------------------------------------
@@ -1390,6 +1756,7 @@ def render():
         "9.3 Tham số ngành",
         "9.4 Giải lập trình",
         "9.5 Chính sách",
+        "🤖 AI Analyst",
     ])
 
     with tabs[0]:
@@ -1406,3 +1773,6 @@ def render():
 
     with tabs[4]:
         show_policy_discussion()
+
+    with tabs[5]:
+        show_ai_policy_analysis()
