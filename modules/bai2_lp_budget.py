@@ -1,3 +1,6 @@
+import base64
+from pathlib import Path
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -29,68 +32,220 @@ except Exception:
 # 0. GIAO DIỆN RIÊNG CHO BÀI 2
 # ---------------------------------------------------------
 def apply_bai2_theme():
-    """
-    Tạo màu nền riêng cho Bài 2 theo tinh thần ngân sách công, tối ưu hóa và công nghệ số.
-    Tông màu chính: vàng ngân sách - xanh công nghệ - xanh dương dữ liệu.
-    """
-    st.markdown(
-        """
-        <style>
-        .stApp {
+    '''
+    Giao diện riêng cho Bài 2, đồng bộ với nền chủ đạo toàn web AIDEOM-VN.
+    Chỉ thay đổi lớp nền, màu sắc, card và hiệu ứng thị giác; không thay đổi mô hình,
+    công thức, nghiệm tối ưu hay logic AI Analyst.
+    '''
+    # Ưu tiên ảnh nền riêng cho Bài 2 nếu có; nếu chưa có thì tự dùng ảnh nền chung của web.
+    module_dir = Path(__file__).resolve().parent
+    app_dir = module_dir.parent
+    background_candidates = [
+        app_dir / "assets" / "bai2_ai_data_background.png",
+        app_dir / "assets" / "vn_aideom_background.png",
+    ]
+
+    bg_base64 = ""
+    for bg_path in background_candidates:
+        try:
+            if bg_path.exists():
+                with open(bg_path, "rb") as image_file:
+                    bg_base64 = base64.b64encode(image_file.read()).decode()
+                break
+        except Exception:
+            bg_base64 = ""
+
+    if bg_base64:
+        background_css = f'''
+            background-image:
+                linear-gradient(120deg, rgba(2, 6, 23, 0.92), rgba(15, 23, 42, 0.78), rgba(2, 44, 34, 0.76)),
+                radial-gradient(circle at 18% 18%, rgba(220, 38, 38, 0.22), transparent 28%),
+                radial-gradient(circle at 82% 24%, rgba(14, 165, 233, 0.26), transparent 30%),
+                url("data:image/png;base64,{bg_base64}");
+            background-size: cover;
+            background-position: center center;
+            background-attachment: fixed;
+        '''
+    else:
+        background_css = '''
             background:
-                radial-gradient(circle at top left, rgba(251, 191, 36, 0.18), transparent 32%),
-                radial-gradient(circle at top right, rgba(14, 165, 233, 0.16), transparent 30%),
-                linear-gradient(180deg, #fff7ed 0%, #eff6ff 52%, #f8fafc 100%);
-        }
-        .bai2-hero {
-            background: linear-gradient(135deg, #92400e 0%, #0f766e 48%, #1d4ed8 100%);
+                radial-gradient(circle at 15% 18%, rgba(220, 38, 38, 0.30), transparent 28%),
+                radial-gradient(circle at 82% 22%, rgba(14, 165, 233, 0.32), transparent 30%),
+                radial-gradient(circle at 50% 88%, rgba(34, 197, 94, 0.22), transparent 34%),
+                linear-gradient(135deg, #020617 0%, #0f172a 46%, #052e2b 100%);
+            background-attachment: fixed;
+        '''
+
+    st.markdown(
+        f'''
+        <style>
+        /* Nền riêng Bài 2: phân tích dữ liệu AI chuyên nghiệp, đồng bộ đỏ đô - xanh dương - xanh công nghệ */
+        .stApp {{
+            {background_css}
+            color: #f8fafc;
+        }}
+
+        [data-testid="stHeader"] {{
+            background: rgba(2, 6, 23, 0.00);
+        }}
+
+        .block-container {{
+            padding-top: 2.0rem;
+            padding-bottom: 3.0rem;
+            background:
+                linear-gradient(180deg, rgba(2, 6, 23, 0.42), rgba(2, 6, 23, 0.20));
+            border-radius: 24px;
+        }}
+
+        /* Lưới dữ liệu mờ phía nền, tạo cảm giác dashboard/AI analytics */
+        .stApp::before {{
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            background-image:
+                linear-gradient(rgba(148, 163, 184, 0.055) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(148, 163, 184, 0.055) 1px, transparent 1px);
+            background-size: 42px 42px;
+            mask-image: linear-gradient(180deg, rgba(0,0,0,0.70), rgba(0,0,0,0.12));
+        }}
+
+        [data-testid="stSidebar"] > div:first-child {{
+            background:
+                linear-gradient(180deg, rgba(2, 6, 23, 0.95), rgba(15, 23, 42, 0.88)),
+                radial-gradient(circle at 20% 12%, rgba(220, 38, 38, 0.22), transparent 34%),
+                radial-gradient(circle at 85% 34%, rgba(14, 165, 233, 0.20), transparent 36%);
+            border-right: 1px solid rgba(255, 255, 255, 0.12);
+            backdrop-filter: blur(16px);
+        }}
+        [data-testid="stSidebar"] * {{
+            color: #e5e7eb;
+        }}
+
+        .bai2-hero {{
+            position: relative;
+            overflow: hidden;
+            background:
+                radial-gradient(circle at 12% 10%, rgba(248, 113, 113, 0.34), transparent 30%),
+                radial-gradient(circle at 88% 18%, rgba(56, 189, 248, 0.34), transparent 34%),
+                linear-gradient(135deg, rgba(127, 29, 29, 0.92), rgba(15, 23, 42, 0.88) 46%, rgba(20, 83, 45, 0.82));
             color: white;
-            border-radius: 22px;
-            padding: 26px 30px;
-            margin-bottom: 20px;
-            box-shadow: 0 14px 34px rgba(15, 23, 42, 0.20);
-        }
-        .bai2-hero h1 {
+            border-radius: 24px;
+            padding: 28px 32px;
+            margin-bottom: 22px;
+            border: 1px solid rgba(255,255,255,0.18);
+            box-shadow: 0 18px 48px rgba(0, 0, 0, 0.34);
+            backdrop-filter: blur(14px);
+        }}
+        .bai2-hero::after {{
+            content: "";
+            position: absolute;
+            inset: 0;
+            background:
+                linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.08) 50%, transparent 100%),
+                repeating-linear-gradient(90deg, transparent 0 28px, rgba(125, 211, 252, 0.055) 29px 30px);
+            opacity: 0.65;
+            pointer-events: none;
+        }}
+        .bai2-hero h1, .bai2-hero p, .bai2-badge {{
+            position: relative;
+            z-index: 1;
+        }}
+        .bai2-hero h1 {{
             margin: 0 0 10px 0;
             font-size: 36px;
             font-weight: 900;
-        }
-        .bai2-hero p {
+            color: #ffffff;
+            text-shadow: 0 4px 18px rgba(0,0,0,0.35);
+        }}
+        .bai2-hero p {{
             font-size: 17px;
             line-height: 1.65;
             margin-bottom: 0;
-            opacity: 0.96;
-        }
-        .bai2-badge {
+            color: #e0f2fe;
+            opacity: 0.98;
+        }}
+        .bai2-badge {{
             display: inline-block;
             padding: 7px 12px;
             border-radius: 999px;
             margin: 10px 8px 0 0;
-            background: rgba(255,255,255,0.16);
-            border: 1px solid rgba(255,255,255,0.26);
-            font-weight: 700;
+            background: rgba(255,255,255,0.13);
+            border: 1px solid rgba(255,255,255,0.24);
+            color: #f8fafc;
+            font-weight: 750;
             font-size: 13px;
-        }
-        .bai2-card {
-            background: rgba(255,255,255,0.78);
-            border: 1px solid rgba(30, 64, 175, 0.12);
-            border-radius: 18px;
+            backdrop-filter: blur(10px);
+        }}
+
+        .bai2-card, .bai2-ai-card {{
+            color: #e5e7eb;
+            background:
+                linear-gradient(135deg, rgba(15, 23, 42, 0.78), rgba(30, 41, 59, 0.58));
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 20px;
             padding: 18px 20px;
             margin: 12px 0;
-            box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
-        }
-        .bai2-ai-card {
-            background: linear-gradient(135deg, rgba(255,247,237,0.95), rgba(239,246,255,0.95));
-            border: 1px solid rgba(14, 116, 144, 0.20);
+            box-shadow: 0 14px 34px rgba(0, 0, 0, 0.24);
+            backdrop-filter: blur(14px);
+        }}
+        .bai2-ai-card {{
+            background:
+                linear-gradient(135deg, rgba(127, 29, 29, 0.36), rgba(14, 116, 144, 0.28), rgba(15, 23, 42, 0.72));
+            border-left: 5px solid rgba(56, 189, 248, 0.82);
+        }}
+
+        div[data-testid="stMetric"] {{
+            background:
+                linear-gradient(135deg, rgba(15, 23, 42, 0.82), rgba(14, 116, 144, 0.24));
+            border: 1px solid rgba(255,255,255,0.14);
             border-radius: 18px;
-            padding: 18px 20px;
-            margin: 12px 0 18px 0;
-        }
+            padding: 14px 16px;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.24);
+            backdrop-filter: blur(12px);
+        }}
+        [data-testid="stMetricLabel"] {{ color: #cbd5e1; }}
+        [data-testid="stMetricValue"] {{ color: #ffffff; }}
+        [data-testid="stMetricDelta"] {{ color: #86efac; }}
+
+        button[data-baseweb="tab"] {{
+            background: rgba(15, 23, 42, 0.62);
+            border-radius: 999px;
+            margin-right: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }}
+        button[data-baseweb="tab"] p {{
+            color: #e5e7eb;
+            font-weight: 700;
+        }}
+        button[data-baseweb="tab"][aria-selected="true"] {{
+            background: linear-gradient(135deg, rgba(220, 38, 38, 0.86), rgba(14, 165, 233, 0.86), rgba(34, 197, 94, 0.62));
+            border: 1px solid rgba(255, 255, 255, 0.30);
+        }}
+
+        [data-testid="stDataFrame"], [data-testid="stPlotlyChart"] {{
+            background: rgba(15, 23, 42, 0.58);
+            border: 1px solid rgba(255, 255, 255, 0.11);
+            border-radius: 20px;
+            padding: 8px;
+            box-shadow: 0 12px 32px rgba(0,0,0,0.26);
+            backdrop-filter: blur(10px);
+        }}
+
+        h1, h2, h3, h4, h5, h6, p, li, label, span {{
+            text-shadow: 0 1px 8px rgba(0, 0, 0, 0.22);
+        }}
+        h1, h2, h3 {{
+            color: #f8fafc;
+        }}
+        p, li, label {{
+            color: #e5e7eb;
+        }}
         </style>
-        """,
+        ''',
         unsafe_allow_html=True
     )
-
 
 def show_bai2_hero():
     st.markdown(
