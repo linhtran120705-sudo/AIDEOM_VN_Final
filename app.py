@@ -331,10 +331,10 @@ def apply_color_readability_tuning() -> None:
     st.markdown(
         """
         <style>
-        /* Làm nền video sáng hơn, ít bị lớp phủ tối che mất */
+        /* Chỉ hạ độ sáng video nền phía sau; giữ nguyên toàn bộ nội dung phía trên */
         #aideom-bg-video-layer video {
-            opacity: 0.96 !important;
-            filter: brightness(1.08) contrast(1.08) saturate(1.10) !important;
+            opacity: 0.66 !important;
+            filter: brightness(0.58) contrast(1.02) saturate(0.92) !important;
         }
 
         #aideom-bg-video-overlay {
