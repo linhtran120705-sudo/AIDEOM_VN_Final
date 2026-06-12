@@ -33,6 +33,7 @@ st.set_page_config(
 APP_DIR = Path(__file__).resolve().parent
 BACKGROUND_IMAGE = APP_DIR / "assets" / "vn_aideom_background.png"
 HOMEPAGE_IMAGE = APP_DIR / "assets" / "homepage_intro.jpg"
+BACKGROUND_VIDEO = APP_DIR / "assets" / "background_video.mp4"
 
 
 def _image_to_base64(image_path: Path) -> str:
@@ -231,46 +232,110 @@ def apply_global_aideom_theme() -> None:
     )
 
 
+
 # =========================================================
-# HOME PAGE VISUAL — ẢNH MỞ ĐẦU ĐIỆN ẢNH
+# GLOBAL VIDEO BACKGROUND — VIDEO NỀN ĐỘNG TOÀN WEB
+# =========================================================
+def render_global_video_background() -> None:
+    """
+    Hiển thị video nền chạy ẩn phía sau toàn bộ web.
+    Video phải nằm tại: assets/background_video.mp4
+    """
+    video_base64 = _image_to_base64(BACKGROUND_VIDEO)
+
+    if not video_base64:
+        st.sidebar.warning("Thiếu video nền: assets/background_video.mp4")
+        return
+
+    st.sidebar.caption("✅ Đã nạp video nền: assets/background_video.mp4")
+
+    video_html = f"""<style>
+html, body {{
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+}}
+.stApp {{
+    background: transparent !important;
+}}
+[data-testid="stAppViewContainer"] {{
+    background: transparent !important;
+}}
+[data-testid="stAppViewContainer"] > .main {{
+    background: transparent !important;
+    position: relative !important;
+    z-index: 2 !important;
+}}
+.block-container {{
+    position: relative !important;
+    z-index: 3 !important;
+    background: linear-gradient(180deg, rgba(2, 6, 23, 0.18), rgba(2, 6, 23, 0.08)) !important;
+    border-radius: 22px !important;
+}}
+[data-testid="stHeader"] {{
+    position: relative !important;
+    z-index: 10 !important;
+    background: rgba(2, 6, 23, 0.00) !important;
+}}
+[data-testid="stSidebar"] {{
+    position: relative !important;
+    z-index: 20 !important;
+}}
+#aideom-bg-video-layer {{
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    overflow: hidden !important;
+    z-index: 0 !important;
+    pointer-events: none !important;
+}}
+#aideom-bg-video-layer video {{
+    width: 100vw !important;
+    height: 100vh !important;
+    object-fit: cover !important;
+    opacity: 0.82 !important;
+    filter: brightness(0.82) contrast(1.18) saturate(1.18) !important;
+}}
+#aideom-bg-video-overlay {{
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 1 !important;
+    pointer-events: none !important;
+    background:
+        linear-gradient(120deg, rgba(2, 6, 23, 0.70), rgba(15, 23, 42, 0.48), rgba(2, 44, 34, 0.58)),
+        radial-gradient(circle at 18% 18%, rgba(185, 28, 28, 0.24), transparent 32%),
+        radial-gradient(circle at 84% 20%, rgba(14, 165, 233, 0.20), transparent 34%),
+        radial-gradient(circle at 50% 88%, rgba(34, 197, 94, 0.14), transparent 36%) !important;
+}}
+</style>
+<div id="aideom-bg-video-layer">
+<video autoplay muted loop playsinline preload="auto">
+<source src="data:video/mp4;base64,{video_base64}" type="video/mp4" />
+</video>
+</div>
+<div id="aideom-bg-video-overlay"></div>"""
+
+    st.markdown(video_html, unsafe_allow_html=True)
+
+# =========================================================
+# HOME PAGE VISUAL — ẢNH MỞ ĐẦU TRANG CHỦ
 # =========================================================
 def render_homepage_intro_visual() -> None:
     """
-    Hiển thị ảnh mở đầu trang chủ theo phong cách cinematic/glassmorphism.
-    Ảnh cần được upload vào: assets/homepage_intro.jpg
+    Hiển thị ảnh mở đầu bằng st.image.
+    Cách này tránh lỗi Streamlit in thừa HTML <div> ra giao diện.
+    Ảnh cần nằm tại: assets/homepage_intro.jpg
     """
-    homepage_base64 = _image_to_base64(HOMEPAGE_IMAGE)
-
-    if not homepage_base64:
+    if not HOMEPAGE_IMAGE.exists():
         st.warning("Chưa tìm thấy ảnh mở đầu. Hãy upload ảnh đúng đường dẫn: assets/homepage_intro.jpg")
         return
 
-    st.markdown(
-        f"""
-        <div class="homepage-visual-shell">
-            <div class="homepage-visual-glow"></div>
-            <div class="homepage-scanline"></div>
-            <img class="homepage-intro-img" src="data:image/jpeg;base64,{homepage_base64}" alt="AIDEOM-VN opening visual">
-
-            <div class="floating-chip chip-1">AI Analyst</div>
-            <div class="floating-chip chip-2">Policy Lab</div>
-            <div class="floating-chip chip-3">12 Models</div>
-
-            <div class="homepage-visual-overlay">
-                <div class="homepage-live-badge">● POLICY SIMULATION LAB</div>
-                <div class="homepage-visual-title">AIDEOM-VN Decision Intelligence</div>
-                <div class="homepage-visual-caption">
-                    Không gian mô phỏng chính sách: dữ liệu kinh tế, tối ưu hóa, AI và dashboard tương tác
-                    được kết nối trong một giao diện trực quan hóa chuyên nghiệp.
-                </div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.image(str(HOMEPAGE_IMAGE), use_container_width=True)
 
 
 apply_global_aideom_theme()
+render_global_video_background()
 
 st.sidebar.title("🇻🇳 VN AIDEOM-VN")
 st.sidebar.caption("Mô hình ra quyết định phát triển kinh tế Việt Nam trong kỉ nguyên AI")
