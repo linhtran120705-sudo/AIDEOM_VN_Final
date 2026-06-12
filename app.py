@@ -35,24 +35,6 @@ BACKGROUND_IMAGE = APP_DIR / "assets" / "vn_aideom_background.png"
 HOMEPAGE_IMAGE = APP_DIR / "assets" / "homepage_intro.jpg"
 BACKGROUND_VIDEO = APP_DIR / "assets" / "background_video.mp4"
 
-# =========================================================
-# SEPARATE BRIGHTNESS CONTROLS — VIDEO NỀN & NỘI DUNG
-# =========================================================
-# Chỉ chỉnh các biến dưới đây nếu muốn thay đổi độ sáng sau này.
-# Các biến VIDEO_* chỉ tác động tới video nền, không tác động tới chữ/card/bảng.
-# Các biến CONTENT_* chỉ tác động tới lớp nội dung phía trên, không tác động tới video.
-VIDEO_BACKGROUND_OPACITY = 0.50       # 0.00 = ẩn video, 1.00 = video rất rõ
-VIDEO_BACKGROUND_BRIGHTNESS = 0.46    # < 1.00 làm video tối hơn đáng kể
-VIDEO_BACKGROUND_CONTRAST = 1.04
-VIDEO_BACKGROUND_SATURATION = 0.88
-VIDEO_BACKGROUND_BLUR_PX = 1.10
-VIDEO_DARK_OVERLAY_ALPHA = 0.46       # tăng nếu muốn nền tối hơn, giảm nếu muốn thấy video rõ hơn
-
-CONTENT_PANEL_ALPHA = 0.78            # nền khối nội dung chính
-CONTENT_CARD_ALPHA = 0.91             # nền các card/metric/biểu đồ
-CONTENT_TEXT_WEIGHT = 720
-CONTENT_HEADING_WEIGHT = 950
-
 
 def _image_to_base64(image_path: Path) -> str:
     """
@@ -257,12 +239,6 @@ def apply_global_aideom_theme() -> None:
 def render_global_video_background() -> None:
     """
     Hiển thị video nền chạy ẩn phía sau toàn bộ web.
-
-    Điểm quan trọng của bản sửa:
-    - Độ sáng video chỉ được chỉnh trong #aideom-bg-video-layer video.
-    - Lớp phủ nền chỉ nằm phía sau nội dung.
-    - Nội dung chính, sidebar, bảng, biểu đồ luôn có z-index cao hơn và KHÔNG bị filter/opacity.
-
     Video phải nằm tại: assets/background_video.mp4
     """
     video_base64 = _image_to_base64(BACKGROUND_VIDEO)
@@ -273,138 +249,84 @@ def render_global_video_background() -> None:
 
     st.sidebar.caption("✅ Đã nạp video nền: assets/background_video.mp4")
 
-    overlay_mid_alpha = max(0.0, VIDEO_DARK_OVERLAY_ALPHA - 0.08)
-    overlay_end_alpha = max(0.0, VIDEO_DARK_OVERLAY_ALPHA - 0.04)
-
-    video_html = f"""
-    <style>
-    :root {{
-        --aideom-video-opacity: {VIDEO_BACKGROUND_OPACITY};
-        --aideom-video-brightness: {VIDEO_BACKGROUND_BRIGHTNESS};
-        --aideom-video-contrast: {VIDEO_BACKGROUND_CONTRAST};
-        --aideom-video-saturation: {VIDEO_BACKGROUND_SATURATION};
-        --aideom-video-blur: {VIDEO_BACKGROUND_BLUR_PX}px;
-        --aideom-video-overlay-alpha: {VIDEO_DARK_OVERLAY_ALPHA};
-    }}
-
-    html, body {{
-        margin: 0 !important;
-        padding: 0 !important;
-        background: #020617 !important;
-    }}
-
-    .stApp {{
-        background: #020617 !important;
-        color: #ffffff !important;
-        isolation: isolate !important;
-    }}
-
-    /* Lớp app ở trên video. Không đặt opacity/filter ở đây để tránh làm mờ toàn bộ nội dung. */
-    [data-testid="stAppViewContainer"] {{
-        position: relative !important;
-        z-index: 10 !important;
-        background: transparent !important;
-        opacity: 1 !important;
-        filter: none !important;
-    }}
-
-    [data-testid="stAppViewContainer"] > .main {{
-        position: relative !important;
-        z-index: 20 !important;
-        background: transparent !important;
-        opacity: 1 !important;
-        filter: none !important;
-    }}
-
-    /* LỚP 1: video nền. Chỉ video bị giảm sáng, không ảnh hưởng nội dung phía trên. */
-    #aideom-bg-video-layer {{
-        position: fixed !important;
-        inset: 0 !important;
-        width: 100vw !important;
-        height: 100vh !important;
-        overflow: hidden !important;
-        z-index: 0 !important;
-        pointer-events: none !important;
-    }}
-
-    #aideom-bg-video-layer video {{
-        width: 100vw !important;
-        height: 100vh !important;
-        object-fit: cover !important;
-        opacity: var(--aideom-video-opacity) !important;
-        filter:
-            brightness(var(--aideom-video-brightness))
-            contrast(var(--aideom-video-contrast))
-            saturate(var(--aideom-video-saturation))
-            blur(var(--aideom-video-blur)) !important;
-        transform: scale(1.025) !important;
-        transform-origin: center center !important;
-    }}
-
-    /* LỚP 2: phủ tối mềm cho video. Lớp này nằm dưới toàn bộ nội dung. */
-    #aideom-bg-video-dim-overlay {{
-        position: fixed !important;
-        inset: 0 !important;
-        z-index: 1 !important;
-        pointer-events: none !important;
-        background:
-            linear-gradient(
-                120deg,
-                rgba(2, 6, 23, var(--aideom-video-overlay-alpha)),
-                rgba(15, 23, 42, {overlay_mid_alpha:.2f}),
-                rgba(2, 44, 34, {overlay_end_alpha:.2f})
-            ),
-            radial-gradient(circle at 18% 18%, rgba(185, 28, 28, 0.14), transparent 34%),
-            radial-gradient(circle at 84% 20%, rgba(14, 165, 233, 0.13), transparent 36%),
-            radial-gradient(circle at 50% 88%, rgba(34, 197, 94, 0.08), transparent 38%) !important;
-    }}
-
-    /* LỚP 3: vignette nhẹ để viền trang trầm, giữa trang vẫn rõ. */
-    #aideom-bg-video-soft-overlay {{
-        position: fixed !important;
-        inset: 0 !important;
-        z-index: 2 !important;
-        pointer-events: none !important;
-        background:
-            radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.035), transparent 40%),
-            radial-gradient(circle at 50% 50%, transparent 0%, rgba(2, 6, 23, 0.24) 82%, rgba(2, 6, 23, 0.46) 100%) !important;
-    }}
-
-    /* Nội dung chính luôn nằm trên mọi lớp video/overlay. */
-    .block-container {{
-        position: relative !important;
-        z-index: 30 !important;
-        opacity: 1 !important;
-        filter: none !important;
-    }}
-
-    [data-testid="stHeader"] {{
-        position: relative !important;
-        z-index: 90 !important;
-        background: rgba(2, 6, 23, 0.00) !important;
-        opacity: 1 !important;
-        filter: none !important;
-    }}
-
-    [data-testid="stSidebar"] {{
-        position: relative !important;
-        z-index: 95 !important;
-        opacity: 1 !important;
-        filter: none !important;
-    }}
-    </style>
-
-    <div id="aideom-bg-video-layer">
-        <video autoplay muted loop playsinline preload="auto">
-            <source src="data:video/mp4;base64,{video_base64}" type="video/mp4" />
-        </video>
-    </div>
-    <div id="aideom-bg-video-dim-overlay"></div>
-    <div id="aideom-bg-video-soft-overlay"></div>
-    """
+    video_html = f"""<style>
+html, body {{
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+}}
+.stApp {{
+    background: transparent !important;
+}}
+[data-testid="stAppViewContainer"] {{
+    background: transparent !important;
+}}
+[data-testid="stAppViewContainer"] > .main {{
+    background: transparent !important;
+    position: relative !important;
+    z-index: 2 !important;
+}}
+.block-container {{
+    position: relative !important;
+    z-index: 3 !important;
+    background: linear-gradient(180deg, rgba(2, 6, 23, 0.18), rgba(2, 6, 23, 0.08)) !important;
+    border-radius: 22px !important;
+}}
+[data-testid="stHeader"] {{
+    position: relative !important;
+    z-index: 10 !important;
+    background: rgba(2, 6, 23, 0.00) !important;
+}}
+[data-testid="stSidebar"] {{
+    position: relative !important;
+    z-index: 20 !important;
+}}
+#aideom-bg-video-layer {{
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    overflow: hidden !important;
+    z-index: 0 !important;
+    pointer-events: none !important;
+}}
+#aideom-bg-video-layer video {{
+    position: absolute !important;
+    width: 50vw !important;
+    height: 50vh !important;
+    right: 3vw !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    object-fit: cover !important;
+    opacity: 0.82 !important;
+    filter: brightness(0.82) contrast(1.18) saturate(1.18) !important;
+    border-radius: 28px !important;
+}}
+#aideom-bg-video-overlay {{
+    position: fixed !important;
+    width: 50vw !important;
+    height: 50vh !important;
+    right: 3vw !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    z-index: 1 !important;
+    pointer-events: none !important;
+    border-radius: 28px !important;
+    background:
+        linear-gradient(120deg, rgba(2, 6, 23, 0.70), rgba(15, 23, 42, 0.48), rgba(2, 44, 34, 0.58)),
+        radial-gradient(circle at 18% 18%, rgba(185, 28, 28, 0.24), transparent 32%),
+        radial-gradient(circle at 84% 20%, rgba(14, 165, 233, 0.20), transparent 34%),
+        radial-gradient(circle at 50% 88%, rgba(34, 197, 94, 0.14), transparent 36%) !important;
+}}
+</style>
+<div id="aideom-bg-video-layer">
+<video autoplay muted loop playsinline preload="auto">
+<source src="data:video/mp4;base64,{video_base64}" type="video/mp4" />
+</video>
+</div>
+<div id="aideom-bg-video-overlay"></div>"""
 
     st.markdown(video_html, unsafe_allow_html=True)
-
 
 
 # =========================================================
@@ -412,90 +334,75 @@ def render_global_video_background() -> None:
 # =========================================================
 def apply_color_readability_tuning() -> None:
     """
-    Tinh chỉnh khả năng đọc theo hướng tách lớp rõ ràng:
-    - Video nền được làm tối ở hàm render_global_video_background().
-    - Nội dung phía trên được làm sáng/đậm ở đây bằng màu chữ, nền card, viền và bóng đổ.
-    - Tuyệt đối không đặt opacity/filter lên container nội dung để tránh lỗi cả bài bị hạ sáng.
+    Tinh chỉnh màu tổng thể:
+    - Video/nền phía sau sáng và nhẹ hơn để nhìn rõ chuyển động.
+    - Khối nội dung chính, card, metric và sidebar đậm hơn để chữ rõ, dễ đọc.
     """
-    content_panel_lower_alpha = max(0.0, CONTENT_PANEL_ALPHA - 0.08)
-    content_card_lower_alpha = max(0.0, CONTENT_CARD_ALPHA - 0.05)
-
     st.markdown(
-        f"""
+        """
         <style>
-        :root {{
-            --aideom-content-panel-alpha: {CONTENT_PANEL_ALPHA};
-            --aideom-content-card-alpha: {CONTENT_CARD_ALPHA};
-            --aideom-content-text-weight: {CONTENT_TEXT_WEIGHT};
-            --aideom-content-heading-weight: {CONTENT_HEADING_WEIGHT};
-        }}
+        /* Chỉ thu nhỏ và đẩy video nền sang bên phải; không đổi bố cục nội dung phía trên */
+        #aideom-bg-video-layer video {
+            position: absolute !important;
+            width: 50vw !important;
+            height: 50vh !important;
+            right: 3vw !important;
+            top: 50% !important;
+            transform: translateY(-50%) !important;
+            object-fit: cover !important;
+            border-radius: 28px !important;
+            opacity: 0.96 !important;
+            filter: brightness(1.08) contrast(1.08) saturate(1.10) !important;
+        }
 
-        /* =====================================================
-           1) KHÓA LỖI: KHÔNG CHO FILTER/OPACITY LÀM MỜ NỘI DUNG
-           ===================================================== */
-        .stApp,
-        [data-testid="stAppViewContainer"],
-        [data-testid="stAppViewContainer"] > .main,
-        .main,
-        .block-container,
-        section.main,
-        [data-testid="stVerticalBlock"],
-        [data-testid="stHorizontalBlock"] {{
-            opacity: 1 !important;
-            filter: none !important;
-        }}
-
-        /* =====================================================
-           2) KHỐI NỘI DUNG CHÍNH: SÁNG RÕ, CÓ NỀN RIÊNG
-           ===================================================== */
-        .block-container {{
+        #aideom-bg-video-overlay {
+            position: fixed !important;
+            width: 50vw !important;
+            height: 50vh !important;
+            right: 3vw !important;
+            top: 50% !important;
+            transform: translateY(-50%) !important;
+            border-radius: 28px !important;
             background:
-                linear-gradient(
-                    180deg,
-                    rgba(8, 17, 34, var(--aideom-content-panel-alpha)),
-                    rgba(15, 23, 42, {content_panel_lower_alpha:.2f})
-                ) !important;
-            border: 1px solid rgba(255, 255, 255, 0.24) !important;
-            box-shadow:
-                0 28px 72px rgba(0, 0, 0, 0.50),
-                inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
-            border-radius: 24px !important;
-            backdrop-filter: blur(8px) !important;
-        }}
+                linear-gradient(120deg, rgba(2, 6, 23, 0.36), rgba(15, 23, 42, 0.24), rgba(2, 44, 34, 0.30)),
+                radial-gradient(circle at 18% 18%, rgba(185, 28, 28, 0.16), transparent 34%),
+                radial-gradient(circle at 84% 20%, rgba(14, 165, 233, 0.15), transparent 36%),
+                radial-gradient(circle at 50% 88%, rgba(34, 197, 94, 0.10), transparent 38%) !important;
+        }
 
-        .hero-card,
-        .section-card,
-        .aideom-glass-card,
+        /* Vùng nội dung chính đậm hơn để tách khỏi nền */
+        .block-container {
+            background: linear-gradient(180deg, rgba(2, 6, 23, 0.66), rgba(15, 23, 42, 0.50)) !important;
+            border: 1px solid rgba(255, 255, 255, 0.13) !important;
+            box-shadow: 0 22px 62px rgba(0, 0, 0, 0.34) !important;
+            border-radius: 24px !important;
+        }
+
+        /* Card nội dung chính rõ và đậm hơn */
+        .hero-card, .section-card, .aideom-glass-card {
+            background: linear-gradient(135deg, rgba(2, 6, 23, 0.92), rgba(15, 23, 42, 0.82)) !important;
+            border: 1px solid rgba(255, 255, 255, 0.22) !important;
+            box-shadow: 0 22px 56px rgba(0, 0, 0, 0.42) !important;
+        }
+
+        .hero-card {
+            background:
+                radial-gradient(circle at 18% 12%, rgba(220, 38, 38, 0.26), transparent 32%),
+                radial-gradient(circle at 82% 24%, rgba(14, 165, 233, 0.28), transparent 36%),
+                radial-gradient(circle at 48% 110%, rgba(34, 197, 94, 0.16), transparent 40%),
+                linear-gradient(135deg, rgba(2, 6, 23, 0.94), rgba(15, 23, 42, 0.78)) !important;
+        }
+
         [data-testid="stMetric"],
         [data-testid="stPlotlyChart"],
         [data-testid="stDataFrame"],
-        [data-testid="stExpander"] {{
-            background:
-                linear-gradient(
-                    135deg,
-                    rgba(8, 17, 34, var(--aideom-content-card-alpha)),
-                    rgba(15, 31, 52, {content_card_lower_alpha:.2f})
-                ) !important;
-            border: 1px solid rgba(255, 255, 255, 0.30) !important;
-            box-shadow:
-                0 22px 56px rgba(0, 0, 0, 0.44),
-                inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
-            backdrop-filter: blur(14px) !important;
-            opacity: 1 !important;
-            filter: none !important;
-        }}
+        [data-testid="stExpander"] {
+            background: linear-gradient(135deg, rgba(2, 6, 23, 0.88), rgba(15, 23, 42, 0.78)) !important;
+            border: 1px solid rgba(255, 255, 255, 0.18) !important;
+            box-shadow: 0 16px 38px rgba(0, 0, 0, 0.34) !important;
+        }
 
-        .hero-card {{
-            background:
-                radial-gradient(circle at 18% 12%, rgba(220, 38, 38, 0.20), transparent 34%),
-                radial-gradient(circle at 82% 24%, rgba(14, 165, 233, 0.24), transparent 38%),
-                radial-gradient(circle at 48% 110%, rgba(34, 197, 94, 0.12), transparent 42%),
-                linear-gradient(135deg, rgba(8, 17, 34, 0.96), rgba(15, 31, 52, 0.90)) !important;
-        }}
-
-        /* =====================================================
-           3) CHỮ: TRẮNG, ĐẬM, NÉT, KHÔNG BỊ MỜ
-           ===================================================== */
+        /* Chữ trong nội dung chính đậm và sáng hơn */
         .block-container h1,
         .block-container h2,
         .block-container h3,
@@ -503,132 +410,43 @@ def apply_color_readability_tuning() -> None:
         .block-container h5,
         .block-container h6,
         .hero-title,
-        .homepage-visual-title {{
+        .homepage-visual-title {
             color: #ffffff !important;
-            font-weight: var(--aideom-content-heading-weight) !important;
-            letter-spacing: -0.2px !important;
-            opacity: 1 !important;
-            filter: none !important;
-            text-shadow:
-                0 2px 2px rgba(0, 0, 0, 0.55),
-                0 0 18px rgba(14, 165, 233, 0.18) !important;
-        }}
+            font-weight: 900 !important;
+            text-shadow: 0 3px 16px rgba(0, 0, 0, 0.55) !important;
+        }
 
         .block-container p,
         .block-container li,
         .block-container label,
-        .block-container span,
-        .block-container div,
         .hero-note,
         .small-muted,
-        .homepage-visual-caption,
-        [data-testid="stMarkdownContainer"],
-        [data-testid="stMarkdownContainer"] * {{
-            color: #f8fafc !important;
-            font-weight: var(--aideom-content-text-weight) !important;
+        .homepage-visual-caption {
+            color: #f1f5f9 !important;
+            font-weight: 600 !important;
             opacity: 1 !important;
-            filter: none !important;
-            text-shadow: 0 1px 8px rgba(0, 0, 0, 0.52) !important;
-        }}
+            text-shadow: 0 2px 12px rgba(0, 0, 0, 0.48) !important;
+        }
 
-        .hero-subtitle,
-        a,
-        a:visited {{
-            color: #e0f7ff !important;
+        .hero-subtitle {
+            color: #dff7ff !important;
             font-weight: 850 !important;
-            opacity: 1 !important;
-        }}
+        }
 
-        b, strong {{
+        .badge {
+            background: rgba(15, 23, 42, 0.80) !important;
+            border: 1px solid rgba(255, 255, 255, 0.26) !important;
             color: #ffffff !important;
-            font-weight: 900 !important;
-        }}
-
-        .badge,
-        .floating-chip,
-        .homepage-live-badge {{
-            background: rgba(15, 23, 42, 0.90) !important;
-            border: 1px solid rgba(255, 255, 255, 0.34) !important;
-            color: #ffffff !important;
-            font-weight: 850 !important;
-            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.36) !important;
-            opacity: 1 !important;
-            filter: none !important;
-        }}
-
-        /* =====================================================
-           4) WIDGET, METRIC, TAB, BẢNG: TĂNG TƯƠNG PHẢN
-           ===================================================== */
-        [data-testid="stMetricLabel"],
-        [data-testid="stMetricDelta"] {{
-            color: #e2e8f0 !important;
             font-weight: 800 !important;
-            opacity: 1 !important;
-        }}
+        }
 
-        [data-testid="stMetricValue"] {{
-            color: #ffffff !important;
-            font-weight: 950 !important;
-            text-shadow: 0 2px 16px rgba(0, 0, 0, 0.62) !important;
-        }}
-
-        button[data-baseweb="tab"] {{
-            background: rgba(15, 23, 42, 0.88) !important;
-            border: 1px solid rgba(255, 255, 255, 0.22) !important;
-            opacity: 1 !important;
-            filter: none !important;
-        }}
-
-        button[data-baseweb="tab"] p {{
-            color: #ffffff !important;
-            font-weight: 850 !important;
-        }}
-
-        button[data-baseweb="tab"][aria-selected="true"] {{
-            background: linear-gradient(135deg, rgba(14, 165, 233, 0.94), rgba(34, 197, 94, 0.82)) !important;
-            border: 1px solid rgba(255, 255, 255, 0.42) !important;
-        }}
-
-        /* Input/select/slider rõ hơn trên nền video. */
-        [data-baseweb="input"],
-        [data-baseweb="select"],
-        [data-baseweb="textarea"],
-        .stTextInput input,
-        .stNumberInput input,
-        .stTextArea textarea {{
-            background: rgba(15, 23, 42, 0.94) !important;
-            color: #ffffff !important;
-            border-color: rgba(255, 255, 255, 0.30) !important;
-            opacity: 1 !important;
-            filter: none !important;
-        }}
-
-        /* Bảng và biểu đồ nổi lên rõ, không bị hòa vào video. */
-        [data-testid="stDataFrame"] {{
-            outline: 1px solid rgba(255, 255, 255, 0.18) !important;
-        }}
-
-        [data-testid="stPlotlyChart"] {{
-            padding: 12px !important;
-        }}
-
-        /* Sidebar đậm vừa đủ, chữ menu vẫn sáng và nét. */
-        [data-testid="stSidebar"] > div:first-child {{
+        /* Sidebar giữ đậm để menu nổi bật */
+        [data-testid="stSidebar"] > div:first-child {
             background:
-                linear-gradient(180deg, rgba(2, 6, 23, 0.98), rgba(15, 23, 42, 0.94)),
-                radial-gradient(circle at 20% 10%, rgba(239, 68, 68, 0.18), transparent 36%),
-                radial-gradient(circle at 80% 35%, rgba(14, 165, 233, 0.16), transparent 36%) !important;
-            border-right: 1px solid rgba(255, 255, 255, 0.18) !important;
-            backdrop-filter: blur(16px) !important;
-            opacity: 1 !important;
-            filter: none !important;
-        }}
-
-        [data-testid="stSidebar"] * {{
-            color: #f8fafc !important;
-            opacity: 1 !important;
-            filter: none !important;
-        }}
+                linear-gradient(180deg, rgba(2, 6, 23, 0.96), rgba(15, 23, 42, 0.91)),
+                radial-gradient(circle at 20% 10%, rgba(239, 68, 68, 0.22), transparent 35%),
+                radial-gradient(circle at 80% 35%, rgba(14, 165, 233, 0.18), transparent 35%) !important;
+        }
         </style>
         """,
         unsafe_allow_html=True,
