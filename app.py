@@ -294,8 +294,8 @@ html, body {{
     width: 100vw !important;
     height: 100vh !important;
     object-fit: cover !important;
-    opacity: 0.82 !important;
-    filter: brightness(1.82) contrast(2.00) saturate(2.00) !important;
+    opacity: 0.28 !important;
+    filter: brightness(0.32) contrast(0.95) saturate(0.78) !important;
 }}
 #aideom-bg-video-overlay {{
     position: fixed !important;
@@ -303,10 +303,10 @@ html, body {{
     z-index: 1 !important;
     pointer-events: none !important;
     background:
-        linear-gradient(120deg, rgba(2, 6, 23, 0.70), rgba(15, 23, 42, 0.48), rgba(2, 44, 34, 0.58)),
-        radial-gradient(circle at 18% 18%, rgba(185, 28, 28, 0.24), transparent 32%),
-        radial-gradient(circle at 84% 20%, rgba(14, 165, 233, 0.20), transparent 34%),
-        radial-gradient(circle at 50% 88%, rgba(34, 197, 94, 0.14), transparent 36%) !important;
+        linear-gradient(120deg, rgba(2, 6, 23, 0.84), rgba(15, 23, 42, 0.72), rgba(2, 44, 34, 0.78)),
+        radial-gradient(circle at 18% 18%, rgba(185, 28, 28, 0.10), transparent 34%),
+        radial-gradient(circle at 84% 20%, rgba(14, 165, 233, 0.08), transparent 36%),
+        radial-gradient(circle at 50% 88%, rgba(34, 197, 94, 0.06), transparent 38%) !important;
 }}
 </style>
 <div id="aideom-bg-video-layer">
@@ -324,60 +324,31 @@ html, body {{
 # =========================================================
 def apply_color_readability_tuning() -> None:
     """
-    Tinh chỉnh màu tổng thể:
-    - Video/nền phía sau sáng và nhẹ hơn để nhìn rõ chuyển động.
-    - Khối nội dung chính, card, metric và sidebar đậm hơn để chữ rõ, dễ đọc.
+    Chỉ tinh chỉnh hai phần:
+    1) Video nền phía sau: giảm sáng tối đa để không lấn át nội dung.
+    2) Chữ/nội dung hiển thị phía trên: tăng độ sáng chữ để dễ đọc.
+
+    Không chỉnh nền card, metric, bảng, sidebar để tránh làm đổi màu toàn bộ web.
     """
     st.markdown(
         """
         <style>
-        /* Chỉ hạ độ sáng video nền phía sau; giữ nguyên toàn bộ nội dung phía trên */
+        /* 1. CHỈ GIẢM ĐỘ SÁNG VIDEO NỀN PHÍA SAU */
         #aideom-bg-video-layer video {
-            opacity: 0.66 !important;
-            filter: brightness(0.58) contrast(1.02) saturate(0.92) !important;
+            opacity: 0.28 !important;
+            filter: brightness(0.32) contrast(0.95) saturate(0.78) !important;
         }
 
+        /* Lớp phủ này nằm ở z-index:1, nội dung ở z-index:2/3 nên chỉ làm tối nền, không làm tối chữ */
         #aideom-bg-video-overlay {
             background:
-                linear-gradient(120deg, rgba(2, 6, 23, 0.36), rgba(15, 23, 42, 0.24), rgba(2, 44, 34, 0.30)),
-                radial-gradient(circle at 18% 18%, rgba(185, 28, 28, 0.16), transparent 34%),
-                radial-gradient(circle at 84% 20%, rgba(14, 165, 233, 0.15), transparent 36%),
-                radial-gradient(circle at 50% 88%, rgba(34, 197, 94, 0.10), transparent 38%) !important;
+                linear-gradient(120deg, rgba(2, 6, 23, 0.84), rgba(15, 23, 42, 0.72), rgba(2, 44, 34, 0.78)),
+                radial-gradient(circle at 18% 18%, rgba(185, 28, 28, 0.10), transparent 34%),
+                radial-gradient(circle at 84% 20%, rgba(14, 165, 233, 0.08), transparent 36%),
+                radial-gradient(circle at 50% 88%, rgba(34, 197, 94, 0.06), transparent 38%) !important;
         }
 
-        /* Vùng nội dung chính đậm hơn để tách khỏi nền */
-        .block-container {
-            background: linear-gradient(180deg, rgba(2, 6, 23, 0.66), rgba(15, 23, 42, 0.50)) !important;
-            border: 1px solid rgba(255, 255, 255, 0.13) !important;
-            box-shadow: 0 22px 62px rgba(0, 0, 0, 0.34) !important;
-            border-radius: 24px !important;
-        }
-
-        /* Card nội dung chính rõ và đậm hơn */
-        .hero-card, .section-card, .aideom-glass-card {
-            background: linear-gradient(135deg, rgba(2, 6, 23, 0.92), rgba(15, 23, 42, 0.82)) !important;
-            border: 1px solid rgba(255, 255, 255, 0.22) !important;
-            box-shadow: 0 22px 56px rgba(0, 0, 0, 0.42) !important;
-        }
-
-        .hero-card {
-            background:
-                radial-gradient(circle at 18% 12%, rgba(220, 38, 38, 0.26), transparent 32%),
-                radial-gradient(circle at 82% 24%, rgba(14, 165, 233, 0.28), transparent 36%),
-                radial-gradient(circle at 48% 110%, rgba(34, 197, 94, 0.16), transparent 40%),
-                linear-gradient(135deg, rgba(2, 6, 23, 0.94), rgba(15, 23, 42, 0.78)) !important;
-        }
-
-        [data-testid="stMetric"],
-        [data-testid="stPlotlyChart"],
-        [data-testid="stDataFrame"],
-        [data-testid="stExpander"] {
-            background: linear-gradient(135deg, rgba(2, 6, 23, 0.88), rgba(15, 23, 42, 0.78)) !important;
-            border: 1px solid rgba(255, 255, 255, 0.18) !important;
-            box-shadow: 0 16px 38px rgba(0, 0, 0, 0.34) !important;
-        }
-
-        /* Chữ trong nội dung chính đậm và sáng hơn */
+        /* 2. CHỈ TĂNG ĐỘ SÁNG CỦA CHỮ/NỘI DUNG PHÍA TRÊN, KHÔNG ĐỔI MÀU NỀN WEB */
         .block-container h1,
         .block-container h2,
         .block-container h3,
@@ -387,40 +358,32 @@ def apply_color_readability_tuning() -> None:
         .hero-title,
         .homepage-visual-title {
             color: #ffffff !important;
-            font-weight: 900 !important;
-            text-shadow: 0 3px 16px rgba(0, 0, 0, 0.55) !important;
+            font-weight: 950 !important;
+            text-shadow: 0 3px 18px rgba(0, 0, 0, 0.72) !important;
         }
 
         .block-container p,
         .block-container li,
         .block-container label,
+        .block-container span,
         .hero-note,
         .small-muted,
         .homepage-visual-caption {
-            color: #f1f5f9 !important;
-            font-weight: 600 !important;
+            color: #f8fafc !important;
+            font-weight: 650 !important;
             opacity: 1 !important;
-            text-shadow: 0 2px 12px rgba(0, 0, 0, 0.48) !important;
+            text-shadow: 0 2px 14px rgba(0, 0, 0, 0.70) !important;
         }
 
         .hero-subtitle {
-            color: #dff7ff !important;
-            font-weight: 850 !important;
+            color: #e0f2fe !important;
+            font-weight: 900 !important;
+            text-shadow: 0 2px 14px rgba(0, 0, 0, 0.68) !important;
         }
 
         .badge {
-            background: rgba(15, 23, 42, 0.80) !important;
-            border: 1px solid rgba(255, 255, 255, 0.26) !important;
             color: #ffffff !important;
-            font-weight: 800 !important;
-        }
-
-        /* Sidebar giữ đậm để menu nổi bật */
-        [data-testid="stSidebar"] > div:first-child {
-            background:
-                linear-gradient(180deg, rgba(2, 6, 23, 0.96), rgba(15, 23, 42, 0.91)),
-                radial-gradient(circle at 20% 10%, rgba(239, 68, 68, 0.22), transparent 35%),
-                radial-gradient(circle at 80% 35%, rgba(14, 165, 233, 0.18), transparent 35%) !important;
+            font-weight: 850 !important;
         }
         </style>
         """,
