@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
+import matplotlib.pyplot as plt
 
 try:
     from pymoo.core.problem import ElementwiseProblem
@@ -20,54 +21,6 @@ try:
 except Exception:
     render_ai_agent = None
     AI_AGENT_AVAILABLE = False
-
-try:
-    import streamlit.components.v1 as components
-    COMPONENTS_AVAILABLE = True
-except Exception:
-    components = None
-    COMPONENTS_AVAILABLE = False
-
-
-def render_webgl_browser_check(note_key="webgl_check"):
-    """
-    Hiển thị hướng dẫn và kiểm tra WebGL ngay trong trình duyệt của người dùng.
-    Code Python không thể tự bật WebGL; WebGL phụ thuộc vào trình duyệt, GPU và chế độ tăng tốc phần cứng.
-    """
-    with st.expander("🔎 Kiểm tra WebGL nếu biểu đồ 3D không hiện", expanded=False):
-        st.markdown(
-            """
-            Biểu đồ Pareto 3D dùng **Plotly WebGL**. Nếu vùng biểu đồ báo *WebGL is not supported*,
-            mô hình vẫn chạy bình thường nhưng trình duyệt đang không cho phép vẽ 3D.
-
-            Cách xử lý nhanh trên Edge/Chrome:
-            1. Vào **Settings → System and performance**.
-            2. Bật **Use graphics acceleration when available**.
-            3. Tắt hẳn trình duyệt rồi mở lại.
-            4. Mở lại Streamlit Cloud và nhấn **Ctrl + F5**.
-            """
-        )
-        if COMPONENTS_AVAILABLE:
-            components.html(
-                """
-                <div id="webgl-status" style="font-family:Arial; font-size:15px; padding:10px; border-radius:10px; background:#0f172a; color:#f8fafc;">
-                    Đang kiểm tra WebGL...
-                </div>
-                <script>
-                const canvas = document.createElement('canvas');
-                const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-                const box = document.getElementById('webgl-status');
-                if (gl) {
-                    box.innerHTML = '✅ Trình duyệt đang hỗ trợ WebGL. Có thể dùng biểu đồ Pareto 3D.';
-                    box.style.border = '1px solid #22c55e';
-                } else {
-                    box.innerHTML = '❌ Trình duyệt chưa hỗ trợ/chưa bật WebGL. Hãy bật graphics acceleration hoặc dùng biểu đồ 2D dự phòng.';
-                    box.style.border = '1px solid #ef4444';
-                }
-                </script>
-                """,
-                height=80,
-            )
 
 
 # =========================================================
@@ -218,6 +171,97 @@ def topsis_on_pareto(df, weights):
     out["topsis_rank"] = out["topsis_score"].rank(ascending=False, method="dense").astype(int)
 
     return out.sort_values("topsis_score", ascending=False).reset_index(drop=True)
+
+
+
+
+# ---------------------------------------------------------
+# HÀM VẼ 3D PARETO — WEBGL + ẢNH TĨNH DỰ PHÒNG
+# ---------------------------------------------------------
+def show_pareto_3d_chart(pareto_df, title, key_suffix):
+    """
+    Hiển thị biểu đồ Pareto 3D theo 2 chế độ:
+    - 3D WebGL tương tác: đúng dạng Plotly 3D, xoay/phóng to được, nhưng phụ thuộc trình duyệt có bật WebGL.
+    - 3D ảnh tĩnh: vẫn là biểu đồ 3D, không cần WebGL, dùng matplotlib nên ổn định trên Streamlit Cloud.
+
+    Lưu ý: nếu trình duyệt báo 'WebGL is not supported', code Python không thể tự bật WebGL.
+    Khi đó cần bật graphics acceleration trong Chrome/Edge hoặc dùng chế độ 3D ảnh tĩnh.
+    """
+    st.markdown(
+        """
+        <div style="padding: 10px 14px; border-radius: 14px; background: rgba(14,165,233,0.10); border: 1px solid rgba(14,165,233,0.25); margin-bottom: 10px;">
+        <b>Ghi chú:</b> Biểu đồ 3D WebGL cần trình duyệt bật tăng tốc đồ họa. Nếu máy báo <i>WebGL is not supported</i>, chọn chế độ <b>3D ảnh tĩnh</b> để vẫn hiển thị được biểu đồ 3D trong web.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    mode = st.radio(
+        "Chế độ hiển thị biểu đồ Pareto 3D",
+        ["3D ảnh tĩnh không cần WebGL", "3D WebGL tương tác"],
+        index=0,
+        horizontal=True,
+        key=f"bai7_pareto_3d_mode_{key_suffix}",
+    )
+
+    if mode == "3D WebGL tương tác":
+        fig_3d = px.scatter_3d(
+            pareto_df,
+            x="growth_gain",
+            y="inequality",
+            z="emission",
+            color="security_risk",
+            size="AI_total",
+            hover_data=["solution_id", "total_budget_used", "H_total", "D_total"],
+            title=title + " — chế độ WebGL tương tác",
+        )
+        fig_3d.update_traces(marker=dict(opacity=0.86))
+        fig_3d.update_layout(
+            height=720,
+            scene=dict(
+                xaxis_title="Tăng trưởng GDP gain",
+                yaxis_title="Bất bình đẳng phân bổ",
+                zaxis_title="Phát thải",
+            ),
+            margin=dict(l=0, r=0, t=55, b=0),
+        )
+        st.plotly_chart(
+            fig_3d,
+            use_container_width=True,
+            config={"displayModeBar": True, "scrollZoom": True, "responsive": True},
+        )
+        st.caption(
+            "Nếu vùng biểu đồ phía trên vẫn trắng hoặc báo WebGL, lỗi nằm ở trình duyệt/GPU. "
+            "Hãy bật graphics acceleration hoặc chuyển sang chế độ 3D ảnh tĩnh."
+        )
+    else:
+        # 3D tĩnh bằng matplotlib: không cần WebGL, không bị trắng trên Streamlit Cloud.
+        x = pareto_df["growth_gain"].astype(float).values
+        y = pareto_df["inequality"].astype(float).values
+        z = pareto_df["emission"].astype(float).values
+        c = pareto_df["security_risk"].astype(float).values
+        ai_total = pareto_df["AI_total"].astype(float).values
+        if np.nanmax(ai_total) > 0:
+            sizes = 35 + 180 * ai_total / np.nanmax(ai_total)
+        else:
+            sizes = np.ones_like(ai_total) * 80
+
+        fig = plt.figure(figsize=(11, 7.2), dpi=170)
+        ax = fig.add_subplot(111, projection="3d")
+        sc = ax.scatter(x, y, z, c=c, s=sizes, cmap="viridis", alpha=0.86, edgecolors="black", linewidths=0.25)
+        ax.set_title(title + " — 3D tĩnh không cần WebGL", fontsize=13, fontweight="bold", pad=16)
+        ax.set_xlabel("Tăng trưởng GDP gain", labelpad=10)
+        ax.set_ylabel("Bất bình đẳng phân bổ", labelpad=10)
+        ax.set_zlabel("Phát thải", labelpad=10)
+        ax.view_init(elev=24, azim=-48)
+        ax.grid(True, alpha=0.25)
+        cbar = fig.colorbar(sc, ax=ax, shrink=0.68, pad=0.10)
+        cbar.set_label("Rủi ro an ninh dữ liệu")
+        st.pyplot(fig, use_container_width=True)
+        plt.close(fig)
+        st.caption(
+            "Đây vẫn là biểu đồ Pareto 3D, nhưng được render thành ảnh tĩnh để tránh lỗi WebGL trên trình duyệt."
+        )
 
 
 # ---------------------------------------------------------
@@ -789,63 +833,10 @@ def show_programming_solution():
     # -----------------------------------------------------
     st.subheader("Câu 7.4.2 — Trích xuất tập Pareto và trực quan hóa")
 
-    st.info(
-        "Bản này GIỮ biểu đồ Pareto 3D WebGL. Nếu máy/trình duyệt không hỗ trợ WebGL, "
-        "hãy bật graphics acceleration trong Chrome/Edge hoặc chọn chế độ 2D dự phòng ngay bên dưới."
-    )
-
-    chart_mode = st.radio(
-        "Chọn kiểu biểu đồ Pareto",
-        ["3D WebGL", "2D dự phòng không cần WebGL"],
-        index=0,
-        horizontal=True,
-        key="bai7_pareto_chart_mode",
-    )
-
-    if chart_mode == "3D WebGL":
-        render_webgl_browser_check("bai7_74_webgl")
-        fig_3d = px.scatter_3d(
-            pareto_df,
-            x="growth_gain",
-            y="inequality",
-            z="emission",
-            color="security_risk",
-            size="AI_total",
-            hover_data=["solution_id", "total_budget_used", "H_total", "D_total"],
-            title="Ảnh 7.5 — Đường biên Pareto 3D: tăng trưởng - bao trùm - phát thải"
-        )
-        fig_3d.update_traces(marker=dict(size=5, opacity=0.88))
-        fig_3d.update_layout(
-            height=720,
-            scene=dict(
-                xaxis_title="Tăng trưởng kỳ vọng, tỷ VND",
-                yaxis_title="Bất bình đẳng phân bổ vùng",
-                zaxis_title="Phát thải",
-            ),
-            margin=dict(l=0, r=0, t=60, b=0),
-        )
-    else:
-        fig_3d = px.scatter(
-            pareto_df,
-            x="growth_gain",
-            y="inequality",
-            color="emission",
-            size="AI_total",
-            hover_data=["solution_id", "total_budget_used", "H_total", "D_total", "security_risk"],
-            render_mode="svg",
-            title="Ảnh 7.5 — Đường biên Pareto 2D dự phòng: tăng trưởng - bao trùm - phát thải"
-        )
-        fig_3d.update_layout(
-            height=620,
-            xaxis_title="Tăng trưởng kỳ vọng, tỷ VND",
-            yaxis_title="Bất bình đẳng phân bổ vùng, thấp hơn là tốt",
-            coloraxis_colorbar_title="Phát thải"
-        )
-
-    st.plotly_chart(
-        fig_3d,
-        use_container_width=True,
-        config={"displayModeBar": True, "responsive": True},
+    show_pareto_3d_chart(
+        pareto_df,
+        title="Ảnh 7.5 — Đường biên Pareto 3D: tăng trưởng - bao trùm - phát thải",
+        key_suffix="741",
     )
 
     parallel_df = pareto_df[[
@@ -1145,58 +1136,10 @@ def show_policy_discussion():
 
     st.dataframe(comparison_df, use_container_width=True)
 
-    chart_mode_c = st.radio(
-        "Chọn kiểu biểu đồ minh chứng câu c",
-        ["3D WebGL", "2D dự phòng không cần WebGL"],
-        index=0,
-        horizontal=True,
-        key="bai7_policy_chart_mode",
-    )
-
-    if chart_mode_c == "3D WebGL":
-        render_webgl_browser_check("bai7_policy_webgl")
-        fig_c = px.scatter_3d(
-            pareto_df,
-            x="growth_gain",
-            y="inequality",
-            z="emission",
-            color="security_risk",
-            size="AI_total",
-            hover_data=["solution_id", "total_budget_used", "H_total", "D_total"],
-            title="Minh chứng câu c — NSGA-II tạo không gian lựa chọn Pareto 3D"
-        )
-        fig_c.update_traces(marker=dict(size=5, opacity=0.88))
-        fig_c.update_layout(
-            height=680,
-            scene=dict(
-                xaxis_title="Tăng trưởng kỳ vọng, tỷ VND",
-                yaxis_title="Bất bình đẳng phân bổ vùng",
-                zaxis_title="Phát thải",
-            ),
-            margin=dict(l=0, r=0, t=60, b=0),
-        )
-    else:
-        fig_c = px.scatter(
-            pareto_df,
-            x="growth_gain",
-            y="inequality",
-            color="emission",
-            size="AI_total",
-            hover_data=["solution_id", "security_risk", "total_budget_used", "H_total", "D_total"],
-            render_mode="svg",
-            title="Minh chứng câu c — NSGA-II tạo không gian lựa chọn Pareto 2D dự phòng"
-        )
-        fig_c.update_layout(
-            height=620,
-            xaxis_title="Tăng trưởng kỳ vọng, tỷ VND",
-            yaxis_title="Bất bình đẳng phân bổ vùng, thấp hơn là tốt",
-            coloraxis_colorbar_title="Phát thải"
-        )
-
-    st.plotly_chart(
-        fig_c,
-        use_container_width=True,
-        config={"displayModeBar": True, "responsive": True},
+    show_pareto_3d_chart(
+        pareto_df,
+        title="Minh chứng câu c — NSGA-II tạo không gian lựa chọn thay vì một nghiệm duy nhất",
+        key_suffix="75c",
     )
 
     st.success(
