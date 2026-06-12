@@ -33,6 +33,7 @@ st.set_page_config(
 APP_DIR = Path(__file__).resolve().parent
 BACKGROUND_IMAGE = APP_DIR / "assets" / "vn_aideom_background.png"
 HOMEPAGE_IMAGE = APP_DIR / "assets" / "homepage_intro.jpg"
+BACKGROUND_VIDEO = APP_DIR / "assets" / "background_video.mp4"
 
 
 def _image_to_base64(image_path: Path) -> str:
@@ -60,7 +61,7 @@ def apply_global_aideom_theme() -> None:
     if bg_base64:
         background_css = f"""
         background-image:
-            linear-gradient(120deg, rgba(2, 6, 23, 0.88), rgba(15, 23, 42, 0.72), rgba(2, 44, 34, 0.74)),
+            linear-gradient(120deg, rgba(2, 6, 23, 0.48), rgba(15, 23, 42, 0.34), rgba(2, 44, 34, 0.40)),
             url("data:image/png;base64,{bg_base64}");
         background-size: cover;
         background-position: center center;
@@ -93,7 +94,7 @@ def apply_global_aideom_theme() -> None:
         .block-container {{
             padding-top: 2.0rem;
             padding-bottom: 3.0rem;
-            background: linear-gradient(180deg, rgba(2, 6, 23, 0.30), rgba(2, 6, 23, 0.18));
+            background: linear-gradient(180deg, rgba(2, 6, 23, 0.58), rgba(15, 23, 42, 0.44));
             border-radius: 22px;
         }}
 
@@ -231,46 +232,194 @@ def apply_global_aideom_theme() -> None:
     )
 
 
-# =========================================================
-# HOME PAGE VISUAL — ẢNH MỞ ĐẦU ĐIỆN ẢNH
-# =========================================================
-def render_homepage_intro_visual() -> None:
-    """
-    Hiển thị ảnh mở đầu trang chủ theo phong cách cinematic/glassmorphism.
-    Ảnh cần được upload vào: assets/homepage_intro.jpg
-    """
-    homepage_base64 = _image_to_base64(HOMEPAGE_IMAGE)
 
-    if not homepage_base64:
-        st.warning("Chưa tìm thấy ảnh mở đầu. Hãy upload ảnh đúng đường dẫn: assets/homepage_intro.jpg")
+# =========================================================
+# GLOBAL VIDEO BACKGROUND — VIDEO NỀN ĐỘNG TOÀN WEB
+# =========================================================
+def render_global_video_background() -> None:
+    """
+    Hiển thị video nền chạy ẩn phía sau toàn bộ web.
+    Video phải nằm tại: assets/background_video.mp4
+
+    Nguyên tắc sửa lỗi:
+    - Video và lớp sương tối chỉ nằm trong layer nền riêng (#aideom-bg-video-layer).
+    - Layer nền có z-index thấp; toàn bộ nội dung Streamlit có z-index cao hơn.
+    - Không dùng overlay fixed phủ lên toàn trang, vì sẽ làm tối cả chữ và card.
+    """
+    video_base64 = _image_to_base64(BACKGROUND_VIDEO)
+
+    if not video_base64:
+        st.sidebar.warning("Thiếu video nền: assets/background_video.mp4")
         return
 
+    st.sidebar.caption("✅ Đã nạp video nền: assets/background_video.mp4")
+
+    video_html = f"""<style>
+html, body {{
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #020617 !important;
+}}
+.stApp,
+[data-testid="stAppViewContainer"] {{
+    background: transparent !important;
+}}
+
+/* Layer nền: chỉ chứa video và lớp sương, không được phủ lên nội dung */
+#aideom-bg-video-layer {{
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    overflow: hidden !important;
+    z-index: 0 !important;
+    pointer-events: none !important;
+    background: #020617 !important;
+}}
+#aideom-bg-video-layer video {{
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    object-fit: cover !important;
+    z-index: 0 !important;
+
+    /* CHỈ GIẢM SÁNG VIDEO NỀN, KHÔNG ẢNH HƯỞNG NỘI DUNG */
+    opacity: 0.24 !important;
+    filter: brightness(0.26) contrast(0.90) saturate(0.70) !important;
+}}
+
+/* Lớp sương tối nằm TRONG layer nền, không nằm phía trên nội dung */
+#aideom-bg-video-layer .aideom-bg-mist {{
+    position: absolute !important;
+    inset: 0 !important;
+    z-index: 1 !important;
+    pointer-events: none !important;
+    background:
+        linear-gradient(120deg, rgba(2, 6, 23, 0.86), rgba(15, 23, 42, 0.76), rgba(2, 44, 34, 0.80)),
+        radial-gradient(circle at 18% 18%, rgba(185, 28, 28, 0.08), transparent 34%),
+        radial-gradient(circle at 84% 20%, rgba(14, 165, 233, 0.07), transparent 36%),
+        radial-gradient(circle at 50% 88%, rgba(34, 197, 94, 0.05), transparent 38%) !important;
+}}
+
+/* Đẩy toàn bộ nội dung lên trên nền video */
+[data-testid="stAppViewContainer"] > .main,
+[data-testid="stAppViewContainer"] main,
+main,
+.block-container,
+[data-testid="stSidebar"],
+[data-testid="stSidebar"] > div:first-child,
+[data-testid="stHeader"],
+[data-testid="stToolbar"],
+[data-testid="stDecoration"] {{
+    position: relative !important;
+    z-index: 20 !important;
+}}
+.block-container {{
+    background: linear-gradient(180deg, rgba(2, 6, 23, 0.58), rgba(15, 23, 42, 0.44)) !important;
+    border-radius: 22px !important;
+}}
+[data-testid="stHeader"] {{
+    background: rgba(2, 6, 23, 0.00) !important;
+}}
+</style>
+<div id="aideom-bg-video-layer">
+<video autoplay muted loop playsinline preload="auto">
+<source src="data:video/mp4;base64,{video_base64}" type="video/mp4" />
+</video>
+<div class="aideom-bg-mist"></div>
+</div>"""
+
+    st.markdown(video_html, unsafe_allow_html=True)
+
+
+# =========================================================
+# COLOR TUNING — CHỈ GIỮ NỘI DUNG SÁNG RÕ, KHÔNG LÀM TỐI TOÀN WEB
+# =========================================================
+def apply_color_readability_tuning() -> None:
+    """
+    Chỉ tinh chỉnh chữ và độ ưu tiên hiển thị nội dung.
+    Không dùng overlay phủ toàn trang, không chỉnh tối màu toàn bộ web.
+    """
     st.markdown(
-        f"""
-        <div class="homepage-visual-shell">
-            <div class="homepage-visual-glow"></div>
-            <div class="homepage-scanline"></div>
-            <img class="homepage-intro-img" src="data:image/jpeg;base64,{homepage_base64}" alt="AIDEOM-VN opening visual">
+        """
+        <style>
+        /* Nội dung phải nằm trên layer video */
+        .block-container,
+        .hero-card,
+        .section-card,
+        .aideom-glass-card,
+        [data-testid="stMetric"],
+        [data-testid="stPlotlyChart"],
+        [data-testid="stDataFrame"],
+        [data-testid="stExpander"] {
+            position: relative !important;
+            z-index: 25 !important;
+        }
 
-            <div class="floating-chip chip-1">AI Analyst</div>
-            <div class="floating-chip chip-2">Policy Lab</div>
-            <div class="floating-chip chip-3">12 Models</div>
+        /* Chữ nội dung sáng và nét hơn, KHÔNG hạ sáng toàn bộ web */
+        .block-container h1,
+        .block-container h2,
+        .block-container h3,
+        .block-container h4,
+        .block-container h5,
+        .block-container h6,
+        .hero-title,
+        .homepage-visual-title {
+            color: #ffffff !important;
+            font-weight: 950 !important;
+            opacity: 1 !important;
+            text-shadow: 0 3px 18px rgba(0, 0, 0, 0.75) !important;
+        }
 
-            <div class="homepage-visual-overlay">
-                <div class="homepage-live-badge">● POLICY SIMULATION LAB</div>
-                <div class="homepage-visual-title">AIDEOM-VN Decision Intelligence</div>
-                <div class="homepage-visual-caption">
-                    Không gian mô phỏng chính sách: dữ liệu kinh tế, tối ưu hóa, AI và dashboard tương tác
-                    được kết nối trong một giao diện trực quan hóa chuyên nghiệp.
-                </div>
-            </div>
-        </div>
+        .block-container p,
+        .block-container li,
+        .block-container label,
+        .block-container span,
+        .hero-note,
+        .small-muted,
+        .homepage-visual-caption {
+            color: #f8fafc !important;
+            opacity: 1 !important;
+            font-weight: 650 !important;
+            text-shadow: 0 2px 14px rgba(0, 0, 0, 0.72) !important;
+        }
+
+        .hero-subtitle {
+            color: #e0f2fe !important;
+            font-weight: 900 !important;
+            opacity: 1 !important;
+            text-shadow: 0 2px 14px rgba(0, 0, 0, 0.70) !important;
+        }
+
+        .badge {
+            color: #ffffff !important;
+            font-weight: 850 !important;
+        }
+        </style>
         """,
         unsafe_allow_html=True,
     )
 
+# =========================================================
+# HOME PAGE VISUAL — ẢNH MỞ ĐẦU TRANG CHỦ
+# =========================================================
+def render_homepage_intro_visual() -> None:
+    """
+    Hiển thị ảnh mở đầu bằng st.image.
+    Cách này tránh lỗi Streamlit in thừa HTML <div> ra giao diện.
+    Ảnh cần nằm tại: assets/homepage_intro.jpg
+    """
+    if not HOMEPAGE_IMAGE.exists():
+        st.warning("Chưa tìm thấy ảnh mở đầu. Hãy upload ảnh đúng đường dẫn: assets/homepage_intro.jpg")
+        return
+
+    st.image(str(HOMEPAGE_IMAGE), use_container_width=True)
+
 
 apply_global_aideom_theme()
+render_global_video_background()
+apply_color_readability_tuning()
 
 st.sidebar.title("🇻🇳 VN AIDEOM-VN")
 st.sidebar.caption("Mô hình ra quyết định phát triển kinh tế Việt Nam trong kỉ nguyên AI")
@@ -550,6 +699,8 @@ if menu == "🏠 Trang chủ":
         """,
         unsafe_allow_html=True
     )
+
+    apply_color_readability_tuning()
 
     # =========================
     # HERO SECTION
