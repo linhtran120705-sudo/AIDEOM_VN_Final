@@ -340,6 +340,25 @@ if menu == "🏠 Trang chủ":
         unsafe_allow_html=True
     )
 
+
+    # =========================
+    # INTRO VIDEO SECTION
+    # =========================
+    st.divider()
+    st.subheader("🎬 Video giới thiệu AIDEOM-VN")
+
+    video_path = APP_DIR / "assets" / "intro_video.mp4"
+
+    if video_path.exists():
+        st.video(str(video_path))
+        st.caption("Video giới thiệu được tải từ thư mục assets/intro_video.mp4 trong repository.")
+    else:
+        st.warning("Chưa tìm thấy video. Hãy upload file MP4 đúng đường dẫn: assets/intro_video.mp4")
+        st.info(
+            "Lưu ý: không upload file .rar để phát video trực tiếp. "
+            "Bạn cần giải nén file .rar, lấy file video .mp4 bên trong, rồi upload file .mp4 vào thư mục assets."
+        )
+
     # =========================
     # QUICK MACRO METRICS
     # =========================
