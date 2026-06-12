@@ -324,63 +324,93 @@ html, body {{
 # =========================================================
 def apply_color_readability_tuning() -> None:
     """
-    Tinh chỉnh màu tổng thể:
-    - Chỉ làm tối và làm mờ video nền phía sau.
-    - Giữ toàn bộ nội dung phía trên sáng, rõ, tương phản cao để dễ đọc.
+    Tinh chỉnh màu tổng thể theo hướng:
+    - Video nền phía sau mờ, tối, có cảm giác sương trầm để không lấn át nội dung.
+    - Nội dung phía trên sáng rõ hơn: chữ trắng hơn, card rõ hơn, bảng/biểu đồ dễ đọc hơn.
     """
     st.markdown(
         """
         <style>
-        /* VIDEO NỀN: làm tối + làm mờ, không tác động vào nội dung phía trên */
+        /* =====================================================
+           1) VIDEO NỀN: MỜ SƯƠNG, TRẦM, KHÔNG LẤN NỘI DUNG
+           ===================================================== */
         #aideom-bg-video-layer video {
-            opacity: 0.42 !important;
-            filter: brightness(0.38) contrast(0.96) saturate(0.82) blur(2.2px) !important;
-            transform: scale(1.025) !important;
+            opacity: 0.34 !important;
+            filter: brightness(0.34) contrast(0.92) saturate(0.72) blur(3.2px) !important;
+            transform: scale(1.045) !important;
+            transform-origin: center center !important;
         }
 
-        /* Lớp phủ tối chỉ nằm phía sau nội dung, giúp video không làm rối mắt */
         #aideom-bg-video-overlay {
             background:
-                linear-gradient(120deg, rgba(2, 6, 23, 0.78), rgba(15, 23, 42, 0.66), rgba(2, 44, 34, 0.72)),
-                radial-gradient(circle at 18% 18%, rgba(185, 28, 28, 0.12), transparent 35%),
-                radial-gradient(circle at 84% 20%, rgba(14, 165, 233, 0.12), transparent 36%),
-                radial-gradient(circle at 50% 88%, rgba(34, 197, 94, 0.08), transparent 38%) !important;
+                linear-gradient(120deg, rgba(2, 6, 23, 0.82), rgba(15, 23, 42, 0.70), rgba(2, 44, 34, 0.76)),
+                radial-gradient(circle at 18% 16%, rgba(185, 28, 28, 0.16), transparent 36%),
+                radial-gradient(circle at 84% 20%, rgba(14, 165, 233, 0.14), transparent 38%),
+                radial-gradient(circle at 50% 88%, rgba(34, 197, 94, 0.08), transparent 42%) !important;
         }
 
-        /* Nội dung chính: sáng, rõ, nổi trên nền video tối */
+        #aideom-bg-video-overlay::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            z-index: 1;
+            pointer-events: none;
+            background:
+                radial-gradient(circle at 25% 24%, rgba(226, 232, 240, 0.055), transparent 30%),
+                radial-gradient(circle at 74% 30%, rgba(186, 230, 253, 0.050), transparent 34%),
+                linear-gradient(180deg, rgba(226, 232, 240, 0.045), rgba(15, 23, 42, 0.10));
+            backdrop-filter: blur(1.4px);
+        }
+
+        #aideom-bg-video-overlay::after {
+            content: "";
+            position: fixed;
+            inset: 0;
+            z-index: 1;
+            pointer-events: none;
+            background:
+                linear-gradient(90deg, rgba(255,255,255,0.030), transparent 24%, rgba(255,255,255,0.025) 52%, transparent 80%),
+                radial-gradient(circle at 50% 50%, transparent 0%, rgba(2, 6, 23, 0.20) 78%, rgba(2, 6, 23, 0.38) 100%);
+            opacity: 0.95;
+        }
+
+        /* =====================================================
+           2) NỘI DUNG CHÍNH: SÁNG RÕ, TÁCH KHỎI NỀN VIDEO
+           ===================================================== */
         .block-container {
-            background: linear-gradient(180deg, rgba(2, 6, 23, 0.54), rgba(15, 23, 42, 0.42)) !important;
+            background: linear-gradient(180deg, rgba(8, 17, 34, 0.76), rgba(15, 23, 42, 0.64)) !important;
             border: 1px solid rgba(255, 255, 255, 0.18) !important;
-            box-shadow: 0 24px 70px rgba(0, 0, 0, 0.38) !important;
+            box-shadow: 0 24px 68px rgba(0, 0, 0, 0.46) !important;
             border-radius: 24px !important;
         }
 
-        /* Card, hero, metric: giữ nền đủ đậm nhưng chữ và nội dung nổi bật */
         .hero-card, .section-card, .aideom-glass-card {
-            background: linear-gradient(135deg, rgba(2, 6, 23, 0.86), rgba(15, 23, 42, 0.76)) !important;
-            border: 1px solid rgba(255, 255, 255, 0.26) !important;
-            box-shadow: 0 22px 56px rgba(0, 0, 0, 0.40) !important;
-            backdrop-filter: blur(14px) !important;
+            background: linear-gradient(135deg, rgba(10, 18, 34, 0.94), rgba(15, 31, 52, 0.86)) !important;
+            border: 1px solid rgba(255, 255, 255, 0.25) !important;
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.46) !important;
+            backdrop-filter: blur(18px) !important;
         }
 
         .hero-card {
             background:
-                radial-gradient(circle at 18% 12%, rgba(220, 38, 38, 0.20), transparent 32%),
-                radial-gradient(circle at 82% 24%, rgba(14, 165, 233, 0.24), transparent 36%),
-                radial-gradient(circle at 48% 110%, rgba(34, 197, 94, 0.12), transparent 40%),
-                linear-gradient(135deg, rgba(2, 6, 23, 0.90), rgba(15, 23, 42, 0.76)) !important;
+                radial-gradient(circle at 18% 12%, rgba(220, 38, 38, 0.22), transparent 34%),
+                radial-gradient(circle at 82% 24%, rgba(14, 165, 233, 0.24), transparent 38%),
+                radial-gradient(circle at 48% 110%, rgba(34, 197, 94, 0.12), transparent 42%),
+                linear-gradient(135deg, rgba(8, 17, 34, 0.96), rgba(15, 31, 52, 0.88)) !important;
         }
 
         [data-testid="stMetric"],
         [data-testid="stPlotlyChart"],
         [data-testid="stDataFrame"],
         [data-testid="stExpander"] {
-            background: linear-gradient(135deg, rgba(2, 6, 23, 0.86), rgba(15, 23, 42, 0.78)) !important;
+            background: linear-gradient(135deg, rgba(8, 17, 34, 0.92), rgba(15, 31, 52, 0.84)) !important;
             border: 1px solid rgba(255, 255, 255, 0.22) !important;
-            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.36) !important;
+            box-shadow: 0 18px 44px rgba(0, 0, 0, 0.38) !important;
         }
 
-        /* Chữ chính: sáng và rõ */
+        /* =====================================================
+           3) CHỮ: TRẮNG HƠN, ĐẬM HƠN, DỄ ĐỌC HƠN
+           ===================================================== */
         .block-container h1,
         .block-container h2,
         .block-container h3,
@@ -390,8 +420,9 @@ def apply_color_readability_tuning() -> None:
         .hero-title,
         .homepage-visual-title {
             color: #ffffff !important;
-            font-weight: 900 !important;
-            text-shadow: 0 3px 16px rgba(0, 0, 0, 0.60) !important;
+            font-weight: 950 !important;
+            letter-spacing: -0.2px !important;
+            text-shadow: 0 3px 18px rgba(0, 0, 0, 0.68) !important;
         }
 
         .block-container p,
@@ -399,24 +430,26 @@ def apply_color_readability_tuning() -> None:
         .block-container label,
         .hero-note,
         .small-muted,
-        .homepage-visual-caption {
+        .homepage-visual-caption,
+        [data-testid="stMarkdownContainer"] {
             color: #f8fafc !important;
-            font-weight: 620 !important;
+            font-weight: 650 !important;
             opacity: 1 !important;
-            text-shadow: 0 2px 12px rgba(0, 0, 0, 0.52) !important;
+            text-shadow: 0 2px 14px rgba(0, 0, 0, 0.60) !important;
         }
 
         .hero-subtitle {
             color: #e0f7ff !important;
-            font-weight: 850 !important;
-            text-shadow: 0 2px 14px rgba(0, 0, 0, 0.48) !important;
+            font-weight: 900 !important;
+            text-shadow: 0 2px 14px rgba(0, 0, 0, 0.62) !important;
         }
 
         .badge {
-            background: rgba(15, 23, 42, 0.82) !important;
+            background: rgba(15, 23, 42, 0.86) !important;
             border: 1px solid rgba(255, 255, 255, 0.30) !important;
             color: #ffffff !important;
-            font-weight: 820 !important;
+            font-weight: 850 !important;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.34) !important;
         }
 
         [data-testid="stMetricLabel"] {
@@ -426,15 +459,22 @@ def apply_color_readability_tuning() -> None:
 
         [data-testid="stMetricValue"] {
             color: #ffffff !important;
-            font-weight: 900 !important;
+            font-weight: 950 !important;
+            text-shadow: 0 2px 16px rgba(0, 0, 0, 0.62) !important;
         }
 
-        /* Sidebar giữ rõ để menu dễ đọc */
+        button[data-baseweb="tab"] p {
+            color: #ffffff !important;
+            font-weight: 800 !important;
+        }
+
+        /* Sidebar vẫn đậm, menu rõ nhưng không che cảm giác nền */
         [data-testid="stSidebar"] > div:first-child {
             background:
-                linear-gradient(180deg, rgba(2, 6, 23, 0.97), rgba(15, 23, 42, 0.92)),
-                radial-gradient(circle at 20% 10%, rgba(239, 68, 68, 0.20), transparent 35%),
-                radial-gradient(circle at 80% 35%, rgba(14, 165, 233, 0.16), transparent 35%) !important;
+                linear-gradient(180deg, rgba(2, 6, 23, 0.97), rgba(15, 23, 42, 0.93)),
+                radial-gradient(circle at 20% 10%, rgba(239, 68, 68, 0.20), transparent 36%),
+                radial-gradient(circle at 80% 35%, rgba(14, 165, 233, 0.16), transparent 36%) !important;
+            backdrop-filter: blur(18px) !important;
         }
         </style>
         """,
