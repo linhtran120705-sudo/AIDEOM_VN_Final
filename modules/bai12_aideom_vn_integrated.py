@@ -4,6 +4,13 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 
+try:
+    from ai_agent import render_ai_agent
+    AI_AGENT_AVAILABLE = True
+except Exception:
+    render_ai_agent = None
+    AI_AGENT_AVAILABLE = False
+
 
 # =========================================================
 # BÀI 12 — ĐỒ ÁN TÍCH HỢP AIDEOM-VN
@@ -1328,6 +1335,323 @@ def show_technical_handoff(total_budget, annual_budget):
     )
 
 
+
+
+# ---------------------------------------------------------
+# 4.5. AI ANALYST — PHÂN TÍCH TÍCH HỢP AIDEOM-VN
+# ---------------------------------------------------------
+def _safe_round_df(df, digits=3):
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        return pd.DataFrame()
+    out = df.copy()
+    num_cols = out.select_dtypes(include=[np.number]).columns
+    out[num_cols] = out[num_cols].round(digits)
+    return out
+
+
+def _risk_status_note(n_warnings):
+    if n_warnings >= 3:
+        return "Rủi ro cao — cần giảm tốc hoặc bổ sung hàng rào an toàn trước khi triển khai."
+    if n_warnings == 2:
+        return "Rủi ro trung bình-cao — cần ưu tiên quản trị, nhân lực và an ninh dữ liệu."
+    if n_warnings == 1:
+        return "Có cảnh báo cục bộ — có thể triển khai nhưng cần giám sát chỉ tiêu rủi ro."
+    return "Rủi ro trong ngưỡng kiểm soát theo bộ tham số mô phỏng."
+
+
+def _scenario_policy_note(row):
+    sid = str(row.get("scenario_id", ""))
+    notes = {
+        "S1": "Truyền thống: tạo nền vốn vật chất nhưng không phải lựa chọn tối ưu nếu mục tiêu là kinh tế số và khả năng chống chịu công nghệ.",
+        "S2": "Số hóa nhanh: phù hợp để tạo quick win về nền tảng số, dữ liệu và dịch vụ số, nhưng vẫn cần bổ sung H để hấp thụ công nghệ.",
+        "S3": "AI dẫn dắt: có upside tăng trưởng/TFP cao, song cần kiểm soát cyber risk, phụ thuộc công nghệ và dịch chuyển lao động.",
+        "S4": "Bao trùm số: ưu tiên nhân lực và vùng yếu, phù hợp nếu mục tiêu chính là giảm rủi ro xã hội và tăng năng lực hấp thụ.",
+        "S5": "Tối ưu cân bằng: thường là phương án dễ bảo vệ nhất trong báo cáo vì cân bằng GDP, NetJob, rủi ro và nhân lực số.",
+    }
+    return notes.get(sid, "Cần đọc cùng KPI, cảnh báo rủi ro và bối cảnh triển khai.")
+
+
+def build_ai_integrated_intelligence(total_budget=80000, annual_budget=1000):
+    """
+    Gói dữ liệu cho tab AI Analyst của Bài 12.
+    Hàm chạy độc lập với các tab khác để thanh AI luôn hiển thị, không phụ thuộc việc người dùng đã mở tab 12.1-12.6 hay chưa.
+    """
+    out = run_integrated_pipeline(total_budget=total_budget, annual_budget=annual_budget)
+
+    kpi = out["kpi"].copy().sort_values("Composite_rank")
+    allocation = out["allocation"].copy()
+    region_allocation = out["region_allocation"].copy()
+    item_allocation = out["item_allocation"].copy()
+    labor = out["labor"].copy()
+    risk = out["risk"].copy()
+    forecast = out["forecast"].copy()
+
+    best = kpi.iloc[0]
+    worst_risk = kpi.sort_values(["RiskWarnings", "AvgRiskScore"], ascending=[False, False]).iloc[0]
+    best_gdp = kpi.sort_values("GDP_2030", ascending=False).iloc[0]
+    best_netjob = kpi.sort_values("NetJob", ascending=False).iloc[0]
+    lowest_risk = kpi.sort_values("AvgRiskScore", ascending=True).iloc[0]
+
+    kpi["AI_Policy_Note"] = kpi.apply(_scenario_policy_note, axis=1)
+    kpi["Risk_Note"] = kpi["RiskWarnings"].apply(_risk_status_note)
+
+    result_table = kpi[[
+        "scenario_id", "scenario_name", "Composite_rank", "Composite_score",
+        "GDP_2030", "NetJob", "AvgRiskScore", "RiskWarnings",
+        "D_2030", "AI_2030", "H_2030", "AI_Policy_Note", "Risk_Note"
+    ]].copy()
+
+    # Bảng phân bổ theo hạng mục cho từng kịch bản, dùng để AI đọc nhanh cơ cấu ưu tiên.
+    item_pivot = item_allocation.pivot_table(
+        index=["scenario_id", "scenario_name"],
+        columns="item",
+        values="total_item_budget",
+        aggfunc="sum",
+        fill_value=0,
+    ).reset_index()
+    item_pivot.columns.name = None
+    for col in ["K", "D", "AI", "H"]:
+        if col not in item_pivot.columns:
+            item_pivot[col] = 0.0
+    item_pivot["AI_H_ratio"] = item_pivot["AI"] / (item_pivot["H"] + 1e-9)
+
+    # Bảng vùng nhận ngân sách lớn nhất trong kịch bản tối ưu.
+    best_sid = str(best["scenario_id"])
+    best_region = region_allocation[region_allocation["scenario_id"] == best_sid].copy()
+    if not best_region.empty:
+        best_region = best_region.sort_values("total_region_budget", ascending=False)
+        best_region["budget_share_pct"] = best_region["total_region_budget"] / best_region["total_region_budget"].sum() * 100
+
+    # Lao động theo kịch bản: NetJob, Displaced, RetrainingGap.
+    labor_summary = labor.groupby(["scenario_id", "scenario_name"], as_index=False).agg(
+        NetJob=("NetJob", "sum"),
+        DisplacedJob=("DisplacedJob", "sum"),
+        RetrainingCapacity=("RetrainingCapacity", "sum"),
+        RetrainingGap=("RetrainingGap", "sum"),
+    )
+    labor_summary["RetrainingCoverage"] = labor_summary["RetrainingCapacity"] / (labor_summary["DisplacedJob"] + 1e-9)
+
+    # Rủi ro theo kịch bản và loại rủi ro.
+    risk_pivot = risk.pivot_table(
+        index=["scenario_id", "scenario_name"],
+        columns="risk_type",
+        values="score",
+        aggfunc="mean",
+        fill_value=0,
+    ).reset_index()
+    risk_pivot.columns.name = None
+
+    # Forecast summary: tăng trưởng GDP 2026-2030 theo kịch bản.
+    forecast_summary = forecast.groupby(["scenario_id", "scenario_name"], as_index=False).agg(
+        GDP_2026=("GDP", "first"),
+        GDP_2030=("GDP", "last"),
+        D_2030=("D", "last"),
+        AI_2030=("AI", "last"),
+        H_2030=("H", "last"),
+    )
+    forecast_summary["GDP_growth_2026_2030_pct"] = (
+        forecast_summary["GDP_2030"] / forecast_summary["GDP_2026"] - 1
+    ) * 100
+
+    metrics = {
+        "Tong_ngan_sach_2026_2030": float(total_budget),
+        "Ngan_sach_hang_nam_M1": float(annual_budget),
+        "So_kich_ban": int(kpi["scenario_id"].nunique()),
+        "Kich_ban_tot_nhat": str(best["scenario_name"]),
+        "Ma_kich_ban_tot_nhat": str(best["scenario_id"]),
+        "Composite_score_tot_nhat": float(best["Composite_score"]),
+        "GDP_2030_tot_nhat": float(best["GDP_2030"]),
+        "NetJob_tot_nhat": float(best["NetJob"]),
+        "AvgRiskScore_tot_nhat": float(best["AvgRiskScore"]),
+        "RiskWarnings_tot_nhat": int(best["RiskWarnings"]),
+        "Kich_ban_GDP_cao_nhat": str(best_gdp["scenario_name"]),
+        "Kich_ban_NetJob_cao_nhat": str(best_netjob["scenario_name"]),
+        "Kich_ban_rui_ro_thap_nhat": str(lowest_risk["scenario_name"]),
+        "Kich_ban_rui_ro_cao_nhat": str(worst_risk["scenario_name"]),
+        "So_canh_bao_rui_ro_cao_nhat": int(worst_risk["RiskWarnings"]),
+        "Chenhlech_GDP_best_vs_AI_led": float(best["GDP_2030"] - kpi.loc[kpi["scenario_id"] == "S3", "GDP_2030"].iloc[0]) if (kpi["scenario_id"] == "S3").any() else np.nan,
+        "Chenhlech_NetJob_best_vs_AI_led": float(best["NetJob"] - kpi.loc[kpi["scenario_id"] == "S3", "NetJob"].iloc[0]) if (kpi["scenario_id"] == "S3").any() else np.nan,
+        "Chenhlech_Risk_best_vs_AI_led": float(best["AvgRiskScore"] - kpi.loc[kpi["scenario_id"] == "S3", "AvgRiskScore"].iloc[0]) if (kpi["scenario_id"] == "S3").any() else np.nan,
+    }
+
+    policy_questions = (
+        "Kịch bản nào nên được chọn làm phương án khuyến nghị chính cho AIDEOM-VN và vì sao? "
+        "Kịch bản AI dẫn dắt có tạo tăng trưởng cao hơn nhưng làm tăng rủi ro cyber, phụ thuộc công nghệ hoặc lao động không? "
+        "S5 tối ưu cân bằng có đáng ưu tiên hơn S3 AI-led hay S4 bao trùm số không? "
+        "Vùng nào và hạng mục nào nên được ưu tiên trong kịch bản tốt nhất? "
+        "Dashboard tích hợp nên được dùng như bằng chứng hỗ trợ quyết định hay thay thế quyết định chính trị - xã hội?"
+    )
+
+    return {
+        "metrics": metrics,
+        "result_table": result_table,
+        "policy_questions": policy_questions,
+        "kpi": kpi,
+        "item_pivot": item_pivot,
+        "best_region": best_region,
+        "labor_summary": labor_summary,
+        "risk_pivot": risk_pivot,
+        "forecast_summary": forecast_summary,
+        "allocation": allocation,
+        "risk": risk,
+    }
+
+
+def show_ai_policy_analysis(total_budget=80000, annual_budget=1000):
+    st.header("🤖 AI Analyst — Phân tích tích hợp AIDEOM-VN")
+
+    sticker_header(
+        "🤖🏛️",
+        "AI Analyst cho Bài 12",
+        "Tab này tổng hợp M1-M6, đọc KPI 2030, phân bổ vùng-ngành, NetJob và rủi ro để tạo khuyến nghị chính sách tự động."
+    )
+
+    with st.spinner("Đang tạo phân tích AI tích hợp cho Bài 12..."):
+        payload = build_ai_integrated_intelligence(
+            total_budget=total_budget,
+            annual_budget=annual_budget,
+        )
+
+    metrics = payload["metrics"]
+    result_table = payload["result_table"]
+    kpi = payload["kpi"]
+    item_pivot = payload["item_pivot"]
+    best_region = payload["best_region"]
+    labor_summary = payload["labor_summary"]
+    risk_pivot = payload["risk_pivot"]
+    forecast_summary = payload["forecast_summary"]
+    risk = payload["risk"]
+
+    st.subheader("1️⃣ Chỉ báo AI Policy Intelligence")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Kịch bản tốt nhất", metrics["Kich_ban_tot_nhat"])
+    c2.metric("Composite score", f"{metrics['Composite_score_tot_nhat']:.3f}")
+    c3.metric("GDP 2030", f"{metrics['GDP_2030_tot_nhat']:,.1f}")
+    c4.metric("NetJob", f"{metrics['NetJob_tot_nhat']:,.0f}")
+
+    c5, c6, c7, c8 = st.columns(4)
+    c5.metric("Risk score tốt nhất", f"{metrics['AvgRiskScore_tot_nhat']:.2f}")
+    c6.metric("Cảnh báo rủi ro", f"{metrics['RiskWarnings_tot_nhat']}")
+    c7.metric("GDP cao nhất", metrics["Kich_ban_GDP_cao_nhat"])
+    c8.metric("Rủi ro thấp nhất", metrics["Kich_ban_rui_ro_thap_nhat"])
+
+    st.subheader("2️⃣ Bảng 12.AI — Đọc nhanh 5 kịch bản chính sách")
+    st.dataframe(_safe_round_df(result_table), use_container_width=True)
+
+    fig_ai_kpi = px.scatter(
+        kpi,
+        x="GDP_2030",
+        y="NetJob",
+        size="AvgRiskScore",
+        color="scenario_name",
+        hover_name="scenario_name",
+        text="scenario_id",
+        title="AI Analyst — Đánh đổi GDP 2030, NetJob và Risk score"
+    )
+    fig_ai_kpi.update_traces(textposition="top center")
+    fig_ai_kpi.update_layout(height=520, xaxis_title="GDP 2030", yaxis_title="NetJob")
+    st.plotly_chart(fig_ai_kpi, use_container_width=True)
+
+    st.subheader("3️⃣ Cơ cấu phân bổ K/D/AI/H theo kịch bản")
+    st.dataframe(_safe_round_df(item_pivot), use_container_width=True)
+
+    item_long = item_pivot.melt(
+        id_vars=["scenario_id", "scenario_name", "AI_H_ratio"],
+        value_vars=["K", "D", "AI", "H"],
+        var_name="Hạng mục",
+        value_name="Ngân sách"
+    )
+    fig_item = px.bar(
+        item_long,
+        x="scenario_name",
+        y="Ngân sách",
+        color="Hạng mục",
+        barmode="stack",
+        title="AI Analyst — Cơ cấu ngân sách theo hạng mục trong từng kịch bản"
+    )
+    fig_item.update_layout(height=520, xaxis_title="Kịch bản", yaxis_title="Tỷ VND")
+    st.plotly_chart(fig_item, use_container_width=True)
+
+    st.subheader("4️⃣ Phân bổ vùng trong kịch bản được AI đánh giá tốt nhất")
+    if best_region is not None and not best_region.empty:
+        st.dataframe(_safe_round_df(best_region), use_container_width=True)
+        fig_region = px.bar(
+            best_region,
+            x="total_region_budget",
+            y="region",
+            orientation="h",
+            color="budget_share_pct",
+            text="total_region_budget",
+            title="AI Analyst — Vùng nhận ngân sách lớn nhất trong kịch bản tốt nhất"
+        )
+        fig_region.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
+        fig_region.update_layout(height=520, yaxis=dict(autorange="reversed"), xaxis_title="Tỷ VND", yaxis_title="Vùng")
+        st.plotly_chart(fig_region, use_container_width=True)
+    else:
+        st.info("Chưa có bảng phân bổ vùng cho kịch bản tốt nhất.")
+
+    st.subheader("5️⃣ Lao động và rủi ro: kiểm tra mặt trái của chính sách AI")
+    left, right = st.columns(2)
+    with left:
+        st.markdown("#### Lao động — NetJob và RetrainingGap")
+        st.dataframe(_safe_round_df(labor_summary), use_container_width=True)
+        fig_labor = px.bar(
+            labor_summary,
+            x="scenario_name",
+            y=["NetJob", "DisplacedJob", "RetrainingGap"],
+            barmode="group",
+            title="AI Analyst — NetJob, displaced jobs và training gap"
+        )
+        fig_labor.update_layout(height=460, xaxis_title="Kịch bản", yaxis_title="Việc làm")
+        st.plotly_chart(fig_labor, use_container_width=True)
+    with right:
+        st.markdown("#### Rủi ro — Cyber, môi trường, phụ thuộc, xã hội")
+        st.dataframe(_safe_round_df(risk_pivot), use_container_width=True)
+        fig_risk = px.bar(
+            risk,
+            x="scenario_name",
+            y="score",
+            color="risk_type",
+            barmode="group",
+            facet_col="status",
+            title="AI Analyst — Cảnh báo rủi ro theo kịch bản"
+        )
+        fig_risk.update_layout(height=460, xaxis_title="Kịch bản", yaxis_title="Risk score")
+        st.plotly_chart(fig_risk, use_container_width=True)
+
+    st.subheader("6️⃣ Dự báo 2026–2030 và năng lực số cuối kỳ")
+    st.dataframe(_safe_round_df(forecast_summary), use_container_width=True)
+    fig_forecast = px.bar(
+        forecast_summary.sort_values("GDP_growth_2026_2030_pct", ascending=False),
+        x="scenario_name",
+        y="GDP_growth_2026_2030_pct",
+        color="scenario_name",
+        text="GDP_growth_2026_2030_pct",
+        title="AI Analyst — Tăng trưởng GDP mô phỏng 2026–2030"
+    )
+    fig_forecast.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
+    fig_forecast.update_layout(height=460, xaxis_title="Kịch bản", yaxis_title="Tăng trưởng GDP 2026–2030 (%)", showlegend=False)
+    st.plotly_chart(fig_forecast, use_container_width=True)
+
+    st.subheader("7️⃣ Kết luận AI Agent")
+    if AI_AGENT_AVAILABLE:
+        render_ai_agent(
+            bai_name="Bài 12 — AIDEOM-VN Dashboard tích hợp hỗ trợ ra quyết định",
+            model_goal=(
+                "Tích hợp các mô-đun dự báo kinh tế, đánh giá sẵn sàng số, phân bổ ngân sách, "
+                "mô phỏng lao động và cảnh báo rủi ro để so sánh 5 kịch bản chính sách kinh tế số Việt Nam đến 2030."
+            ),
+            metrics=metrics,
+            result_table=_safe_round_df(result_table),
+            policy_questions=payload["policy_questions"],
+            key_suffix="bai12",
+        )
+    else:
+        st.error("Chưa tìm thấy `ai_agent.py`, nên chưa thể hiển thị AI Agent.")
+        st.info("Hãy đặt `ai_agent.py` cùng cấp với `app.py`, rồi chạy lại Streamlit.")
+
+    return payload
+
 # ---------------------------------------------------------
 # 5. RENDER
 # ---------------------------------------------------------
@@ -1373,6 +1697,7 @@ def render():
         "12.4 Lao động & rủi ro",
         "12.5 So sánh chính sách",
         "12.6 Bàn giao & mở rộng",
+        "🤖 AI Analyst",
     ])
 
     with tabs[0]:
@@ -1392,3 +1717,6 @@ def render():
 
     with tabs[5]:
         show_technical_handoff(total_budget, annual_budget)
+
+    with tabs[6]:
+        show_ai_policy_analysis(total_budget, annual_budget)
