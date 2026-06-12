@@ -295,7 +295,7 @@ html, body {{
     height: 100vh !important;
     object-fit: cover !important;
     opacity: 0.82 !important;
-    filter: brightness(0.82) contrast(1.18) saturate(1.18) !important;
+    filter: brightness(0.82) contrast(1.00) saturate(1.00) !important;
 }}
 #aideom-bg-video-overlay {{
     position: fixed !important;
