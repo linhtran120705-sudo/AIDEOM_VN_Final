@@ -1720,3 +1720,4 @@ def render():
 
     with tabs[6]:
         show_ai_policy_analysis(total_budget, annual_budget)
+
