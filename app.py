@@ -61,7 +61,7 @@ def apply_global_aideom_theme() -> None:
     if bg_base64:
         background_css = f"""
         background-image:
-            linear-gradient(120deg, rgba(2, 6, 23, 0.88), rgba(15, 23, 42, 0.72), rgba(2, 44, 34, 0.74)),
+            linear-gradient(120deg, rgba(2, 6, 23, 0.48), rgba(15, 23, 42, 0.34), rgba(2, 44, 34, 0.40)),
             url("data:image/png;base64,{bg_base64}");
         background-size: cover;
         background-position: center center;
@@ -94,7 +94,7 @@ def apply_global_aideom_theme() -> None:
         .block-container {{
             padding-top: 2.0rem;
             padding-bottom: 3.0rem;
-            background: linear-gradient(180deg, rgba(2, 6, 23, 0.30), rgba(2, 6, 23, 0.18));
+            background: linear-gradient(180deg, rgba(2, 6, 23, 0.58), rgba(15, 23, 42, 0.44));
             border-radius: 22px;
         }}
 
@@ -318,6 +318,115 @@ html, body {{
 
     st.markdown(video_html, unsafe_allow_html=True)
 
+
+# =========================================================
+# COLOR TUNING — NỀN NHẠT HƠN, NỘI DUNG ĐẬM HƠN
+# =========================================================
+def apply_color_readability_tuning() -> None:
+    """
+    Tinh chỉnh màu tổng thể:
+    - Video/nền phía sau sáng và nhẹ hơn để nhìn rõ chuyển động.
+    - Khối nội dung chính, card, metric và sidebar đậm hơn để chữ rõ, dễ đọc.
+    """
+    st.markdown(
+        """
+        <style>
+        /* Làm nền video sáng hơn, ít bị lớp phủ tối che mất */
+        #aideom-bg-video-layer video {
+            opacity: 0.96 !important;
+            filter: brightness(1.08) contrast(1.08) saturate(1.10) !important;
+        }
+
+        #aideom-bg-video-overlay {
+            background:
+                linear-gradient(120deg, rgba(2, 6, 23, 0.36), rgba(15, 23, 42, 0.24), rgba(2, 44, 34, 0.30)),
+                radial-gradient(circle at 18% 18%, rgba(185, 28, 28, 0.16), transparent 34%),
+                radial-gradient(circle at 84% 20%, rgba(14, 165, 233, 0.15), transparent 36%),
+                radial-gradient(circle at 50% 88%, rgba(34, 197, 94, 0.10), transparent 38%) !important;
+        }
+
+        /* Vùng nội dung chính đậm hơn để tách khỏi nền */
+        .block-container {
+            background: linear-gradient(180deg, rgba(2, 6, 23, 0.66), rgba(15, 23, 42, 0.50)) !important;
+            border: 1px solid rgba(255, 255, 255, 0.13) !important;
+            box-shadow: 0 22px 62px rgba(0, 0, 0, 0.34) !important;
+            border-radius: 24px !important;
+        }
+
+        /* Card nội dung chính rõ và đậm hơn */
+        .hero-card, .section-card, .aideom-glass-card {
+            background: linear-gradient(135deg, rgba(2, 6, 23, 0.92), rgba(15, 23, 42, 0.82)) !important;
+            border: 1px solid rgba(255, 255, 255, 0.22) !important;
+            box-shadow: 0 22px 56px rgba(0, 0, 0, 0.42) !important;
+        }
+
+        .hero-card {
+            background:
+                radial-gradient(circle at 18% 12%, rgba(220, 38, 38, 0.26), transparent 32%),
+                radial-gradient(circle at 82% 24%, rgba(14, 165, 233, 0.28), transparent 36%),
+                radial-gradient(circle at 48% 110%, rgba(34, 197, 94, 0.16), transparent 40%),
+                linear-gradient(135deg, rgba(2, 6, 23, 0.94), rgba(15, 23, 42, 0.78)) !important;
+        }
+
+        [data-testid="stMetric"],
+        [data-testid="stPlotlyChart"],
+        [data-testid="stDataFrame"],
+        [data-testid="stExpander"] {
+            background: linear-gradient(135deg, rgba(2, 6, 23, 0.88), rgba(15, 23, 42, 0.78)) !important;
+            border: 1px solid rgba(255, 255, 255, 0.18) !important;
+            box-shadow: 0 16px 38px rgba(0, 0, 0, 0.34) !important;
+        }
+
+        /* Chữ trong nội dung chính đậm và sáng hơn */
+        .block-container h1,
+        .block-container h2,
+        .block-container h3,
+        .block-container h4,
+        .block-container h5,
+        .block-container h6,
+        .hero-title,
+        .homepage-visual-title {
+            color: #ffffff !important;
+            font-weight: 900 !important;
+            text-shadow: 0 3px 16px rgba(0, 0, 0, 0.55) !important;
+        }
+
+        .block-container p,
+        .block-container li,
+        .block-container label,
+        .hero-note,
+        .small-muted,
+        .homepage-visual-caption {
+            color: #f1f5f9 !important;
+            font-weight: 600 !important;
+            opacity: 1 !important;
+            text-shadow: 0 2px 12px rgba(0, 0, 0, 0.48) !important;
+        }
+
+        .hero-subtitle {
+            color: #dff7ff !important;
+            font-weight: 850 !important;
+        }
+
+        .badge {
+            background: rgba(15, 23, 42, 0.80) !important;
+            border: 1px solid rgba(255, 255, 255, 0.26) !important;
+            color: #ffffff !important;
+            font-weight: 800 !important;
+        }
+
+        /* Sidebar giữ đậm để menu nổi bật */
+        [data-testid="stSidebar"] > div:first-child {
+            background:
+                linear-gradient(180deg, rgba(2, 6, 23, 0.96), rgba(15, 23, 42, 0.91)),
+                radial-gradient(circle at 20% 10%, rgba(239, 68, 68, 0.22), transparent 35%),
+                radial-gradient(circle at 80% 35%, rgba(14, 165, 233, 0.18), transparent 35%) !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
 # =========================================================
 # HOME PAGE VISUAL — ẢNH MỞ ĐẦU TRANG CHỦ
 # =========================================================
@@ -336,6 +445,7 @@ def render_homepage_intro_visual() -> None:
 
 apply_global_aideom_theme()
 render_global_video_background()
+apply_color_readability_tuning()
 
 st.sidebar.title("🇻🇳 VN AIDEOM-VN")
 st.sidebar.caption("Mô hình ra quyết định phát triển kinh tế Việt Nam trong kỉ nguyên AI")
@@ -615,6 +725,8 @@ if menu == "🏠 Trang chủ":
         """,
         unsafe_allow_html=True
     )
+
+    apply_color_readability_tuning()
 
     # =========================
     # HERO SECTION
