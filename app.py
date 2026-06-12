@@ -331,18 +331,18 @@ def apply_color_readability_tuning() -> None:
     st.markdown(
         """
         <style>
-        /* Làm nền video sáng hơn, ít bị lớp phủ tối che mất */
+        /* Hạ thấp độ sáng video nền để không lấn át nội dung chính */
         #aideom-bg-video-layer video {
-            opacity: 0.96 !important;
-            filter: brightness(1.08) contrast(1.08) saturate(1.10) !important;
+            opacity: 0.52 !important;
+            filter: brightness(0.52) contrast(1.02) saturate(0.88) !important;
         }
 
         #aideom-bg-video-overlay {
             background:
-                linear-gradient(120deg, rgba(2, 6, 23, 0.36), rgba(15, 23, 42, 0.24), rgba(2, 44, 34, 0.30)),
-                radial-gradient(circle at 18% 18%, rgba(185, 28, 28, 0.16), transparent 34%),
-                radial-gradient(circle at 84% 20%, rgba(14, 165, 233, 0.15), transparent 36%),
-                radial-gradient(circle at 50% 88%, rgba(34, 197, 94, 0.10), transparent 38%) !important;
+                linear-gradient(120deg, rgba(2, 6, 23, 0.68), rgba(15, 23, 42, 0.54), rgba(2, 44, 34, 0.62)),
+                radial-gradient(circle at 18% 18%, rgba(185, 28, 28, 0.14), transparent 34%),
+                radial-gradient(circle at 84% 20%, rgba(14, 165, 233, 0.12), transparent 36%),
+                radial-gradient(circle at 50% 88%, rgba(34, 197, 94, 0.08), transparent 38%) !important;
         }
 
         /* Vùng nội dung chính đậm hơn để tách khỏi nền */
