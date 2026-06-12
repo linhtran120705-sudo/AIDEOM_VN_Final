@@ -291,27 +291,17 @@ html, body {{
     pointer-events: none !important;
 }}
 #aideom-bg-video-layer video {{
-    position: absolute !important;
-    width: 50vw !important;
-    height: 50vh !important;
-    right: 3vw !important;
-    top: 50% !important;
-    transform: translateY(-50%) !important;
+    width: 100vw !important;
+    height: 100vh !important;
     object-fit: cover !important;
     opacity: 0.82 !important;
     filter: brightness(0.82) contrast(1.18) saturate(1.18) !important;
-    border-radius: 28px !important;
 }}
 #aideom-bg-video-overlay {{
     position: fixed !important;
-    width: 50vw !important;
-    height: 50vh !important;
-    right: 3vw !important;
-    top: 50% !important;
-    transform: translateY(-50%) !important;
+    inset: 0 !important;
     z-index: 1 !important;
     pointer-events: none !important;
-    border-radius: 28px !important;
     background:
         linear-gradient(120deg, rgba(2, 6, 23, 0.70), rgba(15, 23, 42, 0.48), rgba(2, 44, 34, 0.58)),
         radial-gradient(circle at 18% 18%, rgba(185, 28, 28, 0.24), transparent 32%),
@@ -341,28 +331,13 @@ def apply_color_readability_tuning() -> None:
     st.markdown(
         """
         <style>
-        /* Chỉ thu nhỏ và đẩy video nền sang bên phải; không đổi bố cục nội dung phía trên */
+        /* Làm nền video sáng hơn, ít bị lớp phủ tối che mất */
         #aideom-bg-video-layer video {
-            position: absolute !important;
-            width: 50vw !important;
-            height: 50vh !important;
-            right: 3vw !important;
-            top: 50% !important;
-            transform: translateY(-50%) !important;
-            object-fit: cover !important;
-            border-radius: 28px !important;
             opacity: 0.96 !important;
             filter: brightness(1.08) contrast(1.08) saturate(1.10) !important;
         }
 
         #aideom-bg-video-overlay {
-            position: fixed !important;
-            width: 50vw !important;
-            height: 50vh !important;
-            right: 3vw !important;
-            top: 50% !important;
-            transform: translateY(-50%) !important;
-            border-radius: 28px !important;
             background:
                 linear-gradient(120deg, rgba(2, 6, 23, 0.36), rgba(15, 23, 42, 0.24), rgba(2, 44, 34, 0.30)),
                 radial-gradient(circle at 18% 18%, rgba(185, 28, 28, 0.16), transparent 34%),
