@@ -32,6 +32,7 @@ st.set_page_config(
 # =========================================================
 APP_DIR = Path(__file__).resolve().parent
 BACKGROUND_IMAGE = APP_DIR / "assets" / "vn_aideom_background.png"
+HOMEPAGE_IMAGE = APP_DIR / "assets" / "homepage_intro.jpg"
 
 
 def _image_to_base64(image_path: Path) -> str:
@@ -230,6 +231,45 @@ def apply_global_aideom_theme() -> None:
     )
 
 
+# =========================================================
+# HOME PAGE VISUAL — ẢNH MỞ ĐẦU ĐIỆN ẢNH
+# =========================================================
+def render_homepage_intro_visual() -> None:
+    """
+    Hiển thị ảnh mở đầu trang chủ theo phong cách cinematic/glassmorphism.
+    Ảnh cần được upload vào: assets/homepage_intro.jpg
+    """
+    homepage_base64 = _image_to_base64(HOMEPAGE_IMAGE)
+
+    if not homepage_base64:
+        st.warning("Chưa tìm thấy ảnh mở đầu. Hãy upload ảnh đúng đường dẫn: assets/homepage_intro.jpg")
+        return
+
+    st.markdown(
+        f"""
+        <div class="homepage-visual-shell">
+            <div class="homepage-visual-glow"></div>
+            <div class="homepage-scanline"></div>
+            <img class="homepage-intro-img" src="data:image/jpeg;base64,{homepage_base64}" alt="AIDEOM-VN opening visual">
+
+            <div class="floating-chip chip-1">AI Analyst</div>
+            <div class="floating-chip chip-2">Policy Lab</div>
+            <div class="floating-chip chip-3">12 Models</div>
+
+            <div class="homepage-visual-overlay">
+                <div class="homepage-live-badge">● POLICY SIMULATION LAB</div>
+                <div class="homepage-visual-title">AIDEOM-VN Decision Intelligence</div>
+                <div class="homepage-visual-caption">
+                    Không gian mô phỏng chính sách: dữ liệu kinh tế, tối ưu hóa, AI và dashboard tương tác
+                    được kết nối trong một giao diện trực quan hóa chuyên nghiệp.
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 apply_global_aideom_theme()
 
 st.sidebar.title("🇻🇳 VN AIDEOM-VN")
@@ -258,57 +298,253 @@ if menu == "🏠 Trang chủ":
     st.markdown(
         """
         <style>
+        @keyframes aideomPulse {
+            0%, 100% { transform: scale(1); opacity: 0.72; }
+            50% { transform: scale(1.035); opacity: 1; }
+        }
+        @keyframes aideomFloat {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+        @keyframes aideomShimmer {
+            0% { transform: translateX(-130%); opacity: 0; }
+            18% { opacity: 0.92; }
+            55% { opacity: 0.42; }
+            100% { transform: translateX(130%); opacity: 0; }
+        }
+        @keyframes aideomScan {
+            0% { transform: translateY(-110%); opacity: 0; }
+            20% { opacity: 0.32; }
+            100% { transform: translateY(110%); opacity: 0; }
+        }
+        @keyframes aideomGlowBorder {
+            0%, 100% { filter: hue-rotate(0deg); opacity: 0.55; }
+            50% { filter: hue-rotate(28deg); opacity: 0.92; }
+        }
+
         .hero-card {
-            background: linear-gradient(135deg, rgba(14,165,233,0.22), rgba(139,92,246,0.20), rgba(34,197,94,0.13));
-            border: 1px solid rgba(255,255,255,0.12);
-            border-radius: 24px;
-            padding: 30px 34px;
-            margin-bottom: 22px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.22);
+            position: relative;
+            overflow: hidden;
+            background:
+                radial-gradient(circle at 18% 12%, rgba(220, 38, 38, 0.28), transparent 32%),
+                radial-gradient(circle at 82% 24%, rgba(14, 165, 233, 0.32), transparent 36%),
+                radial-gradient(circle at 48% 110%, rgba(34, 197, 94, 0.20), transparent 40%),
+                linear-gradient(135deg, rgba(15, 23, 42, 0.86), rgba(15, 23, 42, 0.50));
+            border: 1px solid rgba(255,255,255,0.16);
+            border-radius: 28px;
+            padding: 34px 38px;
+            margin-bottom: 24px;
+            box-shadow: 0 22px 60px rgba(0,0,0,0.34), 0 0 38px rgba(14,165,233,0.13);
+            backdrop-filter: blur(16px);
+        }
+        .hero-card::before {
+            content: "";
+            position: absolute;
+            inset: -2px;
+            background: linear-gradient(115deg, transparent 0%, rgba(255,255,255,0.24) 45%, transparent 70%);
+            animation: aideomShimmer 7.2s ease-in-out infinite;
+            pointer-events: none;
+        }
+        .hero-card::after {
+            content: "";
+            position: absolute;
+            width: 240px;
+            height: 240px;
+            right: -80px;
+            top: -90px;
+            background: radial-gradient(circle, rgba(14,165,233,0.36), transparent 66%);
+            animation: aideomPulse 5.8s ease-in-out infinite;
+            pointer-events: none;
         }
         .hero-title {
-            font-size: 42px;
-            font-weight: 900;
-            line-height: 1.15;
+            position: relative;
+            z-index: 2;
+            font-size: 44px;
+            font-weight: 950;
+            line-height: 1.12;
             margin-bottom: 10px;
+            letter-spacing: -0.8px;
         }
         .hero-subtitle {
-            font-size: 20px;
-            font-weight: 650;
-            opacity: 0.92;
+            position: relative;
+            z-index: 2;
+            font-size: 21px;
+            font-weight: 750;
+            color: #bae6fd;
+            opacity: 0.96;
             margin-bottom: 12px;
         }
         .hero-note {
+            position: relative;
+            z-index: 2;
             font-size: 16px;
-            line-height: 1.65;
-            opacity: 0.88;
+            line-height: 1.72;
+            opacity: 0.92;
+            max-width: 1080px;
         }
         .badge {
+            position: relative;
+            z-index: 2;
             display: inline-block;
-            padding: 7px 12px;
+            padding: 8px 13px;
             border-radius: 999px;
-            background: rgba(255,255,255,0.10);
-            border: 1px solid rgba(255,255,255,0.13);
+            background: rgba(255,255,255,0.11);
+            border: 1px solid rgba(255,255,255,0.18);
             margin-right: 8px;
             margin-bottom: 8px;
             font-size: 14px;
-            font-weight: 650;
+            font-weight: 750;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 8px 18px rgba(0,0,0,0.14);
+            backdrop-filter: blur(10px);
         }
-        .section-card {
-            background: rgba(255,255,255,0.045);
-            border: 1px solid rgba(255,255,255,0.10);
-            border-radius: 18px;
+        .homepage-visual-shell {
+            position: relative;
+            overflow: hidden;
+            border-radius: 32px;
+            margin: 4px 0 30px 0;
+            border: 1px solid rgba(255,255,255,0.22);
+            background: rgba(2, 6, 23, 0.62);
+            box-shadow: 0 28px 72px rgba(0,0,0,0.42), 0 0 50px rgba(14,165,233,0.18);
+        }
+        .homepage-visual-shell::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            padding: 1px;
+            border-radius: 32px;
+            background: linear-gradient(120deg, rgba(185,28,28,0.78), rgba(14,165,233,0.88), rgba(34,197,94,0.64), rgba(255,255,255,0.18));
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            animation: aideomGlowBorder 6s ease-in-out infinite;
+            z-index: 5;
+            pointer-events: none;
+        }
+        .homepage-visual-shell::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background:
+                radial-gradient(circle at 12% 18%, rgba(220,38,38,0.22), transparent 28%),
+                radial-gradient(circle at 88% 16%, rgba(14,165,233,0.24), transparent 32%),
+                linear-gradient(180deg, rgba(2,6,23,0.04), rgba(2,6,23,0.50));
+            z-index: 2;
+            pointer-events: none;
+        }
+        .homepage-intro-img {
+            width: 100%;
+            display: block;
+            border-radius: 30px;
+            filter: saturate(1.08) contrast(1.04) brightness(0.98);
+            transform: scale(1.002);
+        }
+        .homepage-visual-glow {
+            position: absolute;
+            width: 360px;
+            height: 360px;
+            right: 4%;
+            top: 8%;
+            background: radial-gradient(circle, rgba(14,165,233,0.34), transparent 68%);
+            filter: blur(8px);
+            animation: aideomPulse 5.5s ease-in-out infinite;
+            z-index: 3;
+            pointer-events: none;
+        }
+        .homepage-scanline {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, transparent 0%, rgba(125,211,252,0.20) 50%, transparent 100%);
+            animation: aideomScan 6.5s linear infinite;
+            z-index: 4;
+            pointer-events: none;
+        }
+        .homepage-visual-overlay {
+            position: absolute;
+            left: 28px;
+            bottom: 26px;
+            width: min(650px, calc(100% - 56px));
+            z-index: 6;
             padding: 18px 20px;
+            border-radius: 22px;
+            background: linear-gradient(135deg, rgba(2,6,23,0.68), rgba(15,23,42,0.38));
+            border: 1px solid rgba(255,255,255,0.18);
+            backdrop-filter: blur(14px);
+            box-shadow: 0 18px 42px rgba(0,0,0,0.26);
+        }
+        .homepage-live-badge {
+            display: inline-block;
+            padding: 7px 11px;
+            border-radius: 999px;
+            background: rgba(220,38,38,0.82);
+            color: #ffffff;
+            font-weight: 850;
+            font-size: 12px;
+            letter-spacing: 0.8px;
+            margin-bottom: 10px;
+            box-shadow: 0 0 22px rgba(220,38,38,0.34);
+        }
+        .homepage-visual-title {
+            font-size: 27px;
+            line-height: 1.15;
+            font-weight: 950;
+            color: #ffffff;
+            text-shadow: 0 3px 18px rgba(0,0,0,0.40);
+            margin-bottom: 6px;
+        }
+        .homepage-visual-caption {
+            color: #dbeafe;
+            font-size: 14.5px;
+            line-height: 1.55;
+        }
+        .floating-chip {
+            position: absolute;
+            z-index: 6;
+            padding: 9px 13px;
+            border-radius: 999px;
+            background: linear-gradient(135deg, rgba(15,23,42,0.74), rgba(14,165,233,0.26));
+            border: 1px solid rgba(255,255,255,0.22);
+            color: #f8fafc;
+            font-size: 13px;
+            font-weight: 850;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 14px 28px rgba(0,0,0,0.22);
+            animation: aideomFloat 4.6s ease-in-out infinite;
+        }
+        .chip-1 { right: 5%; top: 12%; animation-delay: 0s; }
+        .chip-2 { right: 11%; bottom: 22%; animation-delay: 0.7s; }
+        .chip-3 { left: 6%; top: 13%; animation-delay: 1.25s; }
+        .section-card {
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(135deg, rgba(15,23,42,0.68), rgba(30,41,59,0.44));
+            border: 1px solid rgba(255,255,255,0.13);
+            border-radius: 20px;
+            padding: 19px 21px;
             margin-bottom: 16px;
+            box-shadow: 0 16px 34px rgba(0,0,0,0.24);
+            backdrop-filter: blur(12px);
+            transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+        }
+        .section-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(125,211,252,0.42);
+            box-shadow: 0 24px 48px rgba(14,165,233,0.14), 0 18px 34px rgba(0,0,0,0.28);
         }
         .small-muted {
             font-size: 14px;
-            opacity: 0.78;
-            line-height: 1.55;
+            opacity: 0.84;
+            line-height: 1.60;
         }
         .big-number {
-            font-size: 30px;
-            font-weight: 850;
+            font-size: 31px;
+            font-weight: 900;
+            color: #7dd3fc;
+            text-shadow: 0 0 18px rgba(14,165,233,0.32);
+        }
+        @media (max-width: 760px) {
+            .hero-title { font-size: 34px; }
+            .homepage-visual-overlay { position: relative; left: auto; bottom: auto; width: auto; margin: 14px; }
+            .floating-chip { display: none; }
         }
         </style>
         """,
@@ -339,6 +575,11 @@ if menu == "🏠 Trang chủ":
         """,
         unsafe_allow_html=True
     )
+
+    # =========================
+    # CINEMATIC HOMEPAGE IMAGE
+    # =========================
+    render_homepage_intro_visual()
 
 
     # =========================
