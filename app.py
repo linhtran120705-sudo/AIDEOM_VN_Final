@@ -294,8 +294,8 @@ html, body {{
     width: 100vw !important;
     height: 100vh !important;
     object-fit: cover !important;
-    opacity: 0.82 !important;
-    filter: brightness(0.82) contrast(1.18) saturate(1.18) !important;
+    opacity: 1.00 !important;
+    filter: brightness(1.95) contrast(1.35) saturate(1.45) !important;
 }}
 #aideom-bg-video-overlay {{
     position: fixed !important;
@@ -303,10 +303,10 @@ html, body {{
     z-index: 1 !important;
     pointer-events: none !important;
     background:
-        linear-gradient(120deg, rgba(2, 6, 23, 0.70), rgba(15, 23, 42, 0.48), rgba(2, 44, 34, 0.58)),
-        radial-gradient(circle at 18% 18%, rgba(185, 28, 28, 0.24), transparent 32%),
-        radial-gradient(circle at 84% 20%, rgba(14, 165, 233, 0.20), transparent 34%),
-        radial-gradient(circle at 50% 88%, rgba(34, 197, 94, 0.14), transparent 36%) !important;
+        linear-gradient(120deg, rgba(2, 6, 23, 0.08), rgba(15, 23, 42, 0.04), rgba(2, 44, 34, 0.06)),
+        radial-gradient(circle at 18% 18%, rgba(185, 28, 28, 0.05), transparent 34%),
+        radial-gradient(circle at 84% 20%, rgba(14, 165, 233, 0.05), transparent 36%),
+        radial-gradient(circle at 50% 88%, rgba(34, 197, 94, 0.04), transparent 38%) !important;
 }}
 </style>
 <div id="aideom-bg-video-layer">
@@ -325,24 +325,24 @@ html, body {{
 def apply_color_readability_tuning() -> None:
     """
     Tinh chỉnh màu tổng thể:
-    - Video/nền phía sau sáng và nhẹ hơn để nhìn rõ chuyển động.
-    - Khối nội dung chính, card, metric và sidebar đậm hơn để chữ rõ, dễ đọc.
+    - Đẩy sáng video nền lên mức tối đa theo yêu cầu.
+    - Giữ nguyên các khối nội dung/card/bảng đang có.
     """
     st.markdown(
         """
         <style>
-        /* Làm nền video sáng hơn, ít bị lớp phủ tối che mất */
+        /* Đẩy sáng tối đa CHỈ video nền phía sau */
         #aideom-bg-video-layer video {
-            opacity: 0.96 !important;
-            filter: brightness(1.08) contrast(1.08) saturate(1.10) !important;
+            opacity: 1.00 !important;
+            filter: brightness(1.95) contrast(1.35) saturate(1.45) !important;
         }
 
         #aideom-bg-video-overlay {
             background:
-                linear-gradient(120deg, rgba(2, 6, 23, 0.36), rgba(15, 23, 42, 0.24), rgba(2, 44, 34, 0.30)),
-                radial-gradient(circle at 18% 18%, rgba(185, 28, 28, 0.16), transparent 34%),
-                radial-gradient(circle at 84% 20%, rgba(14, 165, 233, 0.15), transparent 36%),
-                radial-gradient(circle at 50% 88%, rgba(34, 197, 94, 0.10), transparent 38%) !important;
+                linear-gradient(120deg, rgba(2, 6, 23, 0.08), rgba(15, 23, 42, 0.04), rgba(2, 44, 34, 0.06)),
+                radial-gradient(circle at 18% 18%, rgba(185, 28, 28, 0.05), transparent 34%),
+                radial-gradient(circle at 84% 20%, rgba(14, 165, 233, 0.05), transparent 36%),
+                radial-gradient(circle at 50% 88%, rgba(34, 197, 94, 0.04), transparent 38%) !important;
         }
 
         /* Vùng nội dung chính đậm hơn để tách khỏi nền */
