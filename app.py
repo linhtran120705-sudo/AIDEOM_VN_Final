@@ -238,6 +238,10 @@ def render_homepage_intro_visual() -> None:
     """
     Hiển thị ảnh mở đầu trang chủ theo phong cách cinematic/glassmorphism.
     Ảnh cần được upload vào: assets/homepage_intro.jpg
+
+    Lưu ý kỹ thuật:
+    - HTML được viết sát lề trái trong chuỗi, không thụt đầu dòng.
+    - Tránh Markdown hiểu nhầm các dòng <div> là code block và in nguyên code ra giao diện.
     """
     homepage_base64 = _image_to_base64(HOMEPAGE_IMAGE)
 
@@ -245,29 +249,23 @@ def render_homepage_intro_visual() -> None:
         st.warning("Chưa tìm thấy ảnh mở đầu. Hãy upload ảnh đúng đường dẫn: assets/homepage_intro.jpg")
         return
 
-    st.markdown(
-        f"""
-        <div class="homepage-visual-shell">
-            <div class="homepage-visual-glow"></div>
-            <div class="homepage-scanline"></div>
-            <img class="homepage-intro-img" src="data:image/jpeg;base64,{homepage_base64}" alt="AIDEOM-VN opening visual">
+    homepage_html = f"""<div class="homepage-visual-shell">
+<div class="homepage-visual-glow"></div>
+<div class="homepage-scanline"></div>
+<img class="homepage-intro-img" src="data:image/jpeg;base64,{homepage_base64}" alt="AIDEOM-VN opening visual" />
+<div class="floating-chip chip-1">AI Analyst</div>
+<div class="floating-chip chip-2">Policy Lab</div>
+<div class="floating-chip chip-3">12 Models</div>
+<div class="homepage-visual-overlay">
+<div class="homepage-live-badge">● POLICY SIMULATION LAB</div>
+<div class="homepage-visual-title">AIDEOM-VN Decision Intelligence</div>
+<div class="homepage-visual-caption">
+Không gian mô phỏng chính sách: dữ liệu kinh tế, tối ưu hóa, AI và dashboard tương tác được kết nối trong một giao diện trực quan hóa chuyên nghiệp.
+</div>
+</div>
+</div>"""
 
-            <div class="floating-chip chip-1">AI Analyst</div>
-            <div class="floating-chip chip-2">Policy Lab</div>
-            <div class="floating-chip chip-3">12 Models</div>
-
-            <div class="homepage-visual-overlay">
-                <div class="homepage-live-badge">● POLICY SIMULATION LAB</div>
-                <div class="homepage-visual-title">AIDEOM-VN Decision Intelligence</div>
-                <div class="homepage-visual-caption">
-                    Không gian mô phỏng chính sách: dữ liệu kinh tế, tối ưu hóa, AI và dashboard tương tác
-                    được kết nối trong một giao diện trực quan hóa chuyên nghiệp.
-                </div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.markdown(homepage_html, unsafe_allow_html=True)
 
 
 apply_global_aideom_theme()
